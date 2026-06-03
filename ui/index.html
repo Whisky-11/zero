@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><title>ZERO</title>
+<style>
+ body{margin:0;background:#000;color:#e8e8e8;font:14px/1.5 'Segoe UI',sans-serif;
+      height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;letter-spacing:.05em}
+ #core{width:160px;height:160px;border-radius:50%;border:1px solid #555;
+       box-shadow:0 0 40px #fff2,inset 0 0 30px #fff1;transition:.3s;margin-bottom:24px}
+ .listening #core{box-shadow:0 0 70px #fff5,inset 0 0 40px #fff3;border-color:#bbb}
+ .thinking #core{animation:pulse 1.2s infinite}
+ @keyframes pulse{50%{box-shadow:0 0 90px #fff7}}
+ #status{text-transform:uppercase;color:#888}#rail{margin-top:18px;color:#666;font-size:12px;max-width:60ch}
+</style>
+<div id=wrap><div id=core></div><div id=status>idle</div><div id=rail></div></div>
+<script>
+ const ws=new WebSocket("ws://localhost:8765");
+ ws.onmessage=e=>{const s=JSON.parse(e.data);
+   document.getElementById('wrap').className=s.status||'';
+   document.getElementById('status').textContent=s.status||'idle';
+   if(s.activity)document.getElementById('rail').textContent=s.activity;};
+</script>
