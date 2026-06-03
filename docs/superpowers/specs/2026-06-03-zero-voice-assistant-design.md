@@ -57,8 +57,10 @@ After wake, records the utterance, endpoints on silence (VAD), transcribes via f
 - Long-running SDK session on Ahmad's **Claude Code subscription** (not API billing).
 - **Persona** from `prompts/zero.md`: dry-witted, formal-but-warm British butler; concise; addresses user as **"Ahmad"**; the "about Ahmad" profile (from memory) injected at startup.
 - **Tools:** full Claude Code toolset (bash, file read/write, web) + Ahmad's MCP servers + Zero's custom memory tools (`remember`/`recall`/`forget`).
-- **Streaming** output → `voice` speaks sentence-by-sentence as Zero thinks (key for responsiveness).
-- All tool calls pass through `gate.canUseTool` before execution.
+- **Streaming** output → `voice` speaks sentence-by-sentence as Zero thinks (key for responsiveness). (SDK streams message/block-level; we chunk to sentences for TTS.)
+- All tool calls pass through the SDK **`PreToolUse` hook** (`gate`) before execution.
+
+**Auth & cost (verified on this machine 2026-06-03):** The Agent SDK runs on Ahmad's **Claude Code subscription** — it inherits the `claude login` session (CLI v2.1.161 present, logged in; **no `ANTHROPIC_API_KEY` set**). Credential precedence: if `ANTHROPIC_API_KEY` were ever set it would silently switch Zero to **paid per-token** — so Zero **asserts `ANTHROPIC_API_KEY` is unset at startup and warns if not**. Caveat: the plan's Agent-SDK use draws from a **monthly credit**; heavy 24/7 use can exhaust it and overflow to per-token rates. Efficiency measures (designed in): call the brain only on real commands (not every wake), keep context lean via memory recall, route trivial turns to a cheaper model, and the gate caps runaway tool loops.
 
 ### `voice.py`
 `speak(text)` in Kokoro British (`bm_george`/`bm_lewis`). Streams: synth + play per sentence as the brain emits them. Barge-in: if the user speaks while Zero talks, stop and listen. TTS failure → beep + text log, never crash.
