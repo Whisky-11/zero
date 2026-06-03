@@ -1,6 +1,9 @@
 [wake]
-model = "hey_jarvis"      # built-in; swap to "zero" (custom .onnx path) later
-threshold = 0.5
+# Custom "hey zero" model (trained locally). Threshold raised to 0.7 to suppress
+# false wakes (the model is ~153 FP/hr at 0.5 — see wake-training/README "Option B").
+# To switch back to the bulletproof built-in: model = "hey_jarvis", threshold = 0.5
+model = "zero/models/hey_zero.onnx"
+threshold = 0.7
 
 [stt]
 model = "small"           # tiny|base|small|medium|large-v3

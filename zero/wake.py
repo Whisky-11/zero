@@ -1,15 +1,24 @@
 from __future__ import annotations
+from pathlib import Path
 import numpy as np
 from openwakeword.model import Model
 
 
 class WakeListener:
-    """Feed int16 audio; returns True on the frame the wake word is detected."""
+    """Feed int16 audio; returns True on the frame the wake word is detected.
+
+    `model` is either a built-in openWakeWord model name (e.g. "hey_jarvis")
+    or a path to a custom .onnx model (e.g. "zero/models/hey_zero.onnx"); in the
+    custom case the prediction key is the file stem (e.g. "hey_zero").
+    """
     def __init__(self, model: str = "hey_jarvis", threshold: float = 0.5) -> None:
-        self._key = model
         self._threshold = threshold
-        # built-in models load by default; a custom path also works via wakeword_models=[...]
-        self._model = Model(inference_framework="onnx")
+        if model.endswith(".onnx"):
+            self._key = Path(model).stem
+            self._model = Model(wakeword_models=[model], inference_framework="onnx")
+        else:
+            self._key = model
+            self._model = Model(inference_framework="onnx")
 
     def feed(self, frame_int16: np.ndarray) -> bool:
         self._model.predict(frame_int16)
