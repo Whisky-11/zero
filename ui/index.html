@@ -1,19 +1,877 @@
-<!doctype html><meta charset=utf-8><title>ZERO</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZERO — HUD</title>
 <style>
- body{margin:0;background:#000;color:#e8e8e8;font:14px/1.5 'Segoe UI',sans-serif;
-      height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;letter-spacing:.05em}
- #core{width:160px;height:160px;border-radius:50%;border:1px solid #555;
-       box-shadow:0 0 40px #fff2,inset 0 0 30px #fff1;transition:.3s;margin-bottom:24px}
- .listening #core{box-shadow:0 0 70px #fff5,inset 0 0 40px #fff3;border-color:#bbb}
- .thinking #core{animation:pulse 1.2s infinite}
- @keyframes pulse{50%{box-shadow:0 0 90px #fff7}}
- #status{text-transform:uppercase;color:#888}#rail{margin-top:18px;color:#666;font-size:12px;max-width:60ch}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --fg:        #e8eaf0;
+    --fg-dim:    #7a8090;
+    --fg-faint:  #363a42;
+    --accent:    #b8d0ff;
+    --accent-lo: rgba(180, 210, 255, 0.08);
+    --bg:        #000000;
+    --rail-bg:   rgba(10, 12, 18, 0.85);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    overflow: hidden;
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--fg);
+    letter-spacing: 0.12em;
+  }
+
+  /* ── WebGL canvas ── */
+  #bg-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  /* ── Main HUD layout ── */
+  #hud {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 180px 1fr 180px;
+    pointer-events: none;
+  }
+
+  /* ── Corner bracket decorations ── */
+  .corner {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    z-index: 2;
+    opacity: 0.55;
+  }
+  .corner svg { width: 100%; height: 100%; }
+  .corner--tl { top: 16px; left: 16px; }
+  .corner--tr { top: 16px; right: 16px; transform: scaleX(-1); }
+  .corner--bl { bottom: 16px; left: 16px; transform: scaleY(-1); }
+  .corner--br { bottom: 16px; right: 16px; transform: scale(-1,-1); }
+
+  /* ── Top bar ── */
+  #top-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 60px 0;
+    border-bottom: 1px solid rgba(180,210,255,0.08);
+  }
+
+  .wordmark {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.55em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+  }
+  .wordmark span { color: var(--fg); }
+
+  #clock {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #link-badge {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--fg-dim);
+  }
+  #link-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #445;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  #link-dot.live {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* ── Left / right instrument panels ── */
+  .side-panel {
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    opacity: 0.7;
+  }
+  .side-panel.right { align-items: flex-end; text-align: right; }
+
+  .instr-label {
+    font-size: 9px;
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    margin-bottom: 4px;
+  }
+  .instr-value {
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    color: var(--fg-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .instr-bar {
+    width: 100%;
+    height: 2px;
+    background: var(--fg-faint);
+    margin-top: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .instr-bar-fill {
+    position: absolute;
+    top: 0; left: 0;
+    height: 100%;
+    background: var(--fg-dim);
+    width: 60%;
+    transition: width 1s linear;
+  }
+
+  /* ── Centre core area ── */
+  #centre {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 32px 0;
+  }
+
+  /* ── Instrument rings (SVG-based) ── */
+  #rings-wrap {
+    position: relative;
+    width: 340px;
+    height: 340px;
+    flex-shrink: 0;
+  }
+  #rings-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  #core-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+  }
+
+  /* ── State label ── */
+  #state-wrap {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  #state-label {
+    font-size: 11px;
+    letter-spacing: 0.6em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    transition: color 0.4s;
+    padding-left: 0.6em; /* optical kern for letter-spacing */
+  }
+  #state-label.listening { color: var(--accent); }
+  #state-label.thinking  { color: var(--fg); }
+  #state-label.speaking  { color: var(--fg); }
+
+  #state-sub {
+    font-size: 9px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+  }
+
+  /* ── Activity rail ── */
+  #rail-wrap {
+    grid-column: 1 / -1;
+    background: var(--rail-bg);
+    border-top: 1px solid rgba(180,210,255,0.06);
+    padding: 10px 60px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-height: 46px;
+  }
+
+  #rail-tag {
+    font-size: 9px;
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #rail-track {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    height: 18px;
+  }
+
+  #rail-text {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--fg-dim);
+    white-space: nowrap;
+    position: absolute;
+    top: 0; left: 0;
+    transition: opacity 0.35s;
+  }
+
+  #waveform-canvas {
+    flex-shrink: 0;
+    opacity: 0.5;
+  }
+
+  /* ── Reduced motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
 </style>
-<div id=wrap><div id=core></div><div id=status>idle</div><div id=rail></div></div>
-<script>
- const ws=new WebSocket("ws://localhost:8765");
- ws.onmessage=e=>{const s=JSON.parse(e.data);
-   document.getElementById('wrap').className=s.status||'';
-   document.getElementById('status').textContent=s.status||'idle';
-   if(s.activity)document.getElementById('rail').textContent=s.activity;};
+
+<!-- Import map for Three.js -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
 </script>
+</head>
+<body>
+
+<!-- WebGL background -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- Corner brackets -->
+<div class="corner corner--tl">
+  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
+    <polyline points="0,48 0,0 48,0"/>
+    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
+  </svg>
+</div>
+<div class="corner corner--tr">
+  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
+    <polyline points="0,48 0,0 48,0"/>
+    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
+  </svg>
+</div>
+<div class="corner corner--bl">
+  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
+    <polyline points="0,48 0,0 48,0"/>
+    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
+  </svg>
+</div>
+<div class="corner corner--br">
+  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
+    <polyline points="0,48 0,0 48,0"/>
+    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
+  </svg>
+</div>
+
+<!-- HUD grid -->
+<div id="hud">
+
+  <!-- Top bar -->
+  <div id="top-bar">
+    <div class="wordmark"><span>ZERO</span> &nbsp;/ NEURAL CORE</div>
+    <div id="clock">--:--:--</div>
+    <div id="link-badge">
+      <div id="link-dot"></div>
+      <span id="link-label">LINK OFFLINE</span>
+    </div>
+  </div>
+
+  <!-- Left panel -->
+  <div class="side-panel left">
+    <div>
+      <div class="instr-label">Session</div>
+      <div class="instr-value" id="session-counter">000</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="sess-bar" style="width:20%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Latency</div>
+      <div class="instr-value" id="latency-val">—&nbsp;ms</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="lat-bar" style="width:10%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Memory</div>
+      <div class="instr-value">ACTIVE</div>
+      <div class="instr-bar"><div class="instr-bar-fill" style="width:75%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Frame</div>
+      <div class="instr-value" id="fps-val">60 fps</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="fps-bar" style="width:100%"></div></div>
+    </div>
+  </div>
+
+  <!-- Centre -->
+  <div id="centre">
+    <div id="rings-wrap">
+      <!-- SVG instrument rings -->
+      <svg id="rings-svg" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
+        <!-- Outer thin ring with tick marks -->
+        <circle cx="170" cy="170" r="162" fill="none" stroke="rgba(180,210,255,0.06)" stroke-width="1"/>
+        <circle cx="170" cy="170" r="158" fill="none" stroke="rgba(180,210,255,0.04)" stroke-width="0.5"/>
+        <!-- Tick marks: major every 30°, minor every 10° -->
+        <g id="ticks-outer" stroke="rgba(180,210,255,0.25)" stroke-linecap="round"></g>
+        <!-- Mid ring -->
+        <circle cx="170" cy="170" r="140" fill="none" stroke="rgba(180,210,255,0.08)" stroke-width="0.8"/>
+        <!-- Inner arcs - HUD sweep indicators -->
+        <circle cx="170" cy="170" r="128" fill="none" stroke="rgba(180,210,255,0.04)" stroke-width="1"/>
+        <!-- Sweeping accent arc (animated via JS) -->
+        <circle id="sweep-arc" cx="170" cy="170" r="128"
+          fill="none" stroke="rgba(180,210,255,0.35)" stroke-width="1.5"
+          stroke-dasharray="40 766" stroke-dashoffset="0"
+          stroke-linecap="round"/>
+        <!-- Second sweep (opposite) -->
+        <circle id="sweep-arc2" cx="170" cy="170" r="128"
+          fill="none" stroke="rgba(180,210,255,0.15)" stroke-width="0.8"
+          stroke-dasharray="20 786" stroke-dashoffset="383"
+          stroke-linecap="round"/>
+        <!-- Crosshair lines -->
+        <line x1="8" y1="170" x2="46" y2="170" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
+        <line x1="294" y1="170" x2="332" y2="170" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
+        <line x1="170" y1="8" x2="170" y2="46" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
+        <line x1="170" y1="294" x2="170" y2="332" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
+        <!-- Diagonal micro cross -->
+        <line x1="136" y1="136" x2="142" y2="142" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
+        <line x1="204" y1="136" x2="198" y2="142" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
+        <line x1="136" y1="204" x2="142" y2="198" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
+        <line x1="204" y1="204" x2="198" y2="198" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
+        <!-- Inner ring glow ring (animated opacity) -->
+        <circle id="glow-ring" cx="170" cy="170" r="100"
+          fill="none" stroke="rgba(180,210,255,0.0)" stroke-width="30"/>
+        <!-- Core border ring -->
+        <circle cx="170" cy="170" r="85" fill="none" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
+        <circle cx="170" cy="170" r="82" fill="none" stroke="rgba(180,210,255,0.07)" stroke-width="0.5"/>
+      </svg>
+      <!-- Core canvas (2D: orb + waveform shimmer) -->
+      <canvas id="core-canvas"></canvas>
+    </div>
+
+    <div id="state-wrap">
+      <div id="state-label">IDLE</div>
+      <div id="state-sub">NEURAL STANDBY</div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="side-panel right">
+    <div>
+      <div class="instr-label">Mode</div>
+      <div class="instr-value" id="mode-val">PASSIVE</div>
+      <div class="instr-bar"><div class="instr-bar-fill" style="width:35%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Audio</div>
+      <div class="instr-value" id="audio-val">MONITOR</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="audio-bar" style="width:50%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Voice Engine</div>
+      <div class="instr-value">ELEVEN</div>
+      <div class="instr-bar"><div class="instr-bar-fill" style="width:90%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Uptime</div>
+      <div class="instr-value" id="uptime-val">00:00</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="uptime-bar" style="width:5%"></div></div>
+    </div>
+  </div>
+
+  <!-- Bottom activity rail -->
+  <div id="rail-wrap">
+    <div id="rail-tag">TELEMETRY</div>
+    <div id="rail-track">
+      <div id="rail-text">SYSTEM NOMINAL — AWAITING INPUT</div>
+    </div>
+    <!-- Mini waveform -->
+    <canvas id="waveform-canvas" width="120" height="26"></canvas>
+  </div>
+
+</div><!-- #hud -->
+
+<script type="module">
+import * as THREE from 'three';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const state = {
+  status: 'idle',      // idle | listening | thinking | speaking | connected
+  activity: '',
+  linked: false,
+  sessionCount: 0,
+  uptimeStart: Date.now(),
+  frameCount: 0,
+  lastFpsTime: performance.now(),
+  fps: 60,
+};
+
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ─── Clock ────────────────────────────────────────────────────────────────────
+const clockEl = document.getElementById('clock');
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  clockEl.textContent = `${h}:${m}:${s}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Uptime ───────────────────────────────────────────────────────────────────
+const uptimeEl = document.getElementById('uptime-val');
+const uptimeBarEl = document.getElementById('uptime-bar');
+setInterval(() => {
+  const sec = Math.floor((Date.now() - state.uptimeStart) / 1000);
+  const m = String(Math.floor(sec / 60)).padStart(2,'0');
+  const s = String(sec % 60).padStart(2,'0');
+  uptimeEl.textContent = `${m}:${s}`;
+  uptimeBarEl.style.width = Math.min(100, (sec / 3600) * 100) + '%';
+}, 1000);
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+const linkDot = document.getElementById('link-dot');
+const linkLabel = document.getElementById('link-label');
+const stateLabel = document.getElementById('state-label');
+const stateSub = document.getElementById('state-sub');
+const railText = document.getElementById('rail-text');
+const sessionEl = document.getElementById('session-counter');
+const modeEl = document.getElementById('mode-val');
+const audioEl = document.getElementById('audio-val');
+
+const STATE_META = {
+  idle:       { label: 'IDLE',      sub: 'NEURAL STANDBY',   mode: 'PASSIVE',  audio: 'MONITOR'  },
+  listening:  { label: 'LISTENING', sub: 'VOICE CAPTURE',    mode: 'ACTIVE',   audio: 'CAPTURE'  },
+  thinking:   { label: 'THINKING',  sub: 'PROCESSING',       mode: 'COMPUTE',  audio: 'HOLD'     },
+  speaking:   { label: 'SPEAKING',  sub: 'OUTPUT STREAM',    mode: 'RESPONSE', audio: 'PLAYBACK' },
+  connected:  { label: 'CONNECTED', sub: 'LINK ESTABLISHED', mode: 'PASSIVE',  audio: 'MONITOR'  },
+};
+
+function applyStatus(status, activity) {
+  state.status = status;
+  const meta = STATE_META[status] || STATE_META.idle;
+  stateLabel.textContent = meta.label;
+  stateLabel.className = status;
+  stateSub.textContent = meta.sub;
+  modeEl.textContent = meta.mode;
+  audioEl.textContent = meta.audio;
+  if (activity) {
+    setRailText(activity);
+  }
+  if (status === 'listening') {
+    state.sessionCount = Math.min(999, state.sessionCount + 1);
+    sessionEl.textContent = String(state.sessionCount).padStart(3,'0');
+    const pct = Math.min(100, (state.sessionCount / 50) * 100);
+    document.getElementById('sess-bar').style.width = pct + '%';
+  }
+}
+
+function setRailText(text) {
+  railText.style.opacity = '0';
+  setTimeout(() => {
+    railText.textContent = text.toUpperCase();
+    railText.style.opacity = '1';
+  }, 180);
+}
+
+let wsReconnectTimer = null;
+let wsPingStart = 0;
+
+function connectWS() {
+  const ws = new WebSocket('ws://localhost:8765');
+
+  ws.onopen = () => {
+    state.linked = true;
+    linkDot.className = 'live';
+    linkLabel.textContent = 'LINK LIVE';
+    wsPingStart = performance.now();
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    const lat = Math.round(performance.now() - wsPingStart);
+    wsPingStart = performance.now();
+    document.getElementById('latency-val').textContent = `${lat} ms`;
+    const pct = Math.max(5, Math.min(100, 100 - (lat / 5)));
+    document.getElementById('lat-bar').style.width = pct + '%';
+    applyStatus(msg.status || 'idle', msg.activity || '');
+  };
+
+  ws.onclose = ws.onerror = () => {
+    state.linked = false;
+    linkDot.className = '';
+    linkLabel.textContent = 'LINK OFFLINE';
+    applyStatus('idle', '');
+    setRailText('WS OFFLINE — RECONNECTING…');
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = setTimeout(connectWS, 3000);
+  };
+}
+connectWS();
+
+// ─── THREE.js Starfield ───────────────────────────────────────────────────────
+const bgCanvas = document.getElementById('bg-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas: bgCanvas, antialias: false, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.z = 600;
+
+// Stars
+const STAR_COUNT = 1800;
+const starGeo = new THREE.BufferGeometry();
+const positions = new Float32Array(STAR_COUNT * 3);
+const sizes = new Float32Array(STAR_COUNT);
+const alphas = new Float32Array(STAR_COUNT);
+for (let i = 0; i < STAR_COUNT; i++) {
+  positions[i*3]   = (Math.random() - 0.5) * 2400;
+  positions[i*3+1] = (Math.random() - 0.5) * 1800;
+  positions[i*3+2] = (Math.random() - 0.5) * 1200;
+  sizes[i]  = Math.random() * 1.8 + 0.3;
+  alphas[i] = Math.random() * 0.7 + 0.15;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+starGeo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+
+const starMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  vertexShader: `
+    attribute float size;
+    attribute float alpha;
+    varying float vAlpha;
+    void main(){
+      vAlpha = alpha;
+      vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * (400.0 / -mvPos.z);
+      gl_Position = projectionMatrix * mvPos;
+    }
+  `,
+  fragmentShader: `
+    varying float vAlpha;
+    void main(){
+      float d = length(gl_PointCoord - vec2(0.5));
+      if(d > 0.5) discard;
+      float a = smoothstep(0.5, 0.0, d) * vAlpha;
+      gl_FragColor = vec4(0.85, 0.9, 1.0, a);
+    }
+  `,
+});
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// Faint nebula plane (two overlapping large transparent textures made procedurally)
+function makeNebulaTexture(size) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const cx = size/2, cy = size/2;
+  // radial vignette
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, size*0.5);
+  g.addColorStop(0,   'rgba(30,40,70,0.18)');
+  g.addColorStop(0.4, 'rgba(10,15,35,0.10)');
+  g.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  // soft streaks
+  for (let i = 0; i < 6; i++) {
+    const x = cx + (Math.random()-0.5)*size*0.6;
+    const y = cy + (Math.random()-0.5)*size*0.6;
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, size*0.3);
+    gr.addColorStop(0,   'rgba(80,100,180,0.04)');
+    gr.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, size, size);
+  }
+  return new THREE.CanvasTexture(c);
+}
+const nebulaTex = makeNebulaTexture(512);
+const nebulaMat = new THREE.MeshBasicMaterial({ map: nebulaTex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+const nebulaPlane = new THREE.Mesh(new THREE.PlaneGeometry(2400, 1800), nebulaMat);
+nebulaPlane.position.z = -400;
+scene.add(nebulaPlane);
+
+// Resize
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// ─── SVG tick marks (built once) ──────────────────────────────────────────────
+(function buildTicks() {
+  const g = document.getElementById('ticks-outer');
+  const cx = 170, cy = 170, r = 158;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  for (let deg = 0; deg < 360; deg += 10) {
+    const rad = (deg - 90) * Math.PI / 180;
+    const isMajor = deg % 30 === 0;
+    const len = isMajor ? 10 : 5;
+    const x1 = cx + r * Math.cos(rad);
+    const y1 = cy + r * Math.sin(rad);
+    const x2 = cx + (r - len) * Math.cos(rad);
+    const y2 = cy + (r - len) * Math.sin(rad);
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', x1.toFixed(2));
+    line.setAttribute('y1', y1.toFixed(2));
+    line.setAttribute('x2', x2.toFixed(2));
+    line.setAttribute('y2', y2.toFixed(2));
+    line.setAttribute('stroke-width', isMajor ? '1.2' : '0.6');
+    line.setAttribute('opacity', isMajor ? '0.5' : '0.25');
+    g.appendChild(line);
+  }
+})();
+
+// ─── Core canvas (orb) ───────────────────────────────────────────────────────
+const coreCanvas = document.getElementById('core-canvas');
+const coreCtx = coreCanvas.getContext('2d');
+const CORE_SIZE = 340;
+coreCanvas.width = coreCanvas.height = CORE_SIZE;
+const CC = CORE_SIZE / 2; // centre
+
+// ─── Waveform canvas ─────────────────────────────────────────────────────────
+const waveCanvas = document.getElementById('waveform-canvas');
+const waveCtx = waveCanvas.getContext('2d');
+
+// ─── Animation state ─────────────────────────────────────────────────────────
+let breathPhase  = 0;
+let ripplePhase  = 0;
+let spinAngle    = 0;
+let sweepOffset  = 0;
+let sweepOffset2 = 383;
+let glowAlpha    = 0;
+const glowRingEl = document.getElementById('glow-ring');
+const sweepArcEl = document.getElementById('sweep-arc');
+const sweepArc2El = document.getElementById('sweep-arc2');
+
+// Smooth target values for glow
+let targetGlow  = 0.0;
+let currentGlow = 0.0;
+
+// Ring radii for ripple
+const rippleRings = [{ r: 0, a: 0 }, { r: 0, a: 0 }, { r: 0, a: 0 }];
+
+// ─── Main RAF loop ────────────────────────────────────────────────────────────
+let lastT = performance.now();
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min((now - lastT) / 1000, 0.05);
+  lastT = now;
+
+  // FPS
+  state.frameCount++;
+  if (now - state.lastFpsTime > 1000) {
+    state.fps = Math.round(state.frameCount * 1000 / (now - state.lastFpsTime));
+    state.frameCount = 0;
+    state.lastFpsTime = now;
+    document.getElementById('fps-val').textContent = state.fps + ' fps';
+    document.getElementById('fps-bar').style.width = Math.min(100, (state.fps / 60) * 100) + '%';
+  }
+
+  const s = state.status;
+  const reduced = reducedMotion;
+
+  // ── Phase advances ──
+  breathPhase  += dt * (reduced ? 0 : (s === 'idle' ? 0.45 : s === 'listening' ? 0.9 : 1.6));
+  ripplePhase  += dt * (reduced ? 0 : 0.8);
+  spinAngle    += dt * (reduced ? 0 : (s === 'thinking' ? 1.8 : s === 'listening' ? 0.6 : 0.25));
+  sweepOffset  -= reduced ? 0 : (s === 'thinking' ? 6 : s === 'listening' ? 3 : 1);
+  sweepOffset2 -= reduced ? 0 : (s === 'thinking' ? 4 : s === 'listening' ? 2 : 0.7);
+
+  // ── Glow target ──
+  targetGlow = s === 'idle' ? 0.03 : s === 'listening' ? 0.14 : s === 'thinking' ? 0.10 : s === 'speaking' ? 0.11 : 0.03;
+  if (!reduced && s !== 'idle') {
+    targetGlow += Math.sin(breathPhase * 1.5) * 0.04;
+  }
+  currentGlow += (targetGlow - currentGlow) * dt * 4;
+  glowRingEl.style.stroke = `rgba(180,210,255,${currentGlow.toFixed(3)})`;
+
+  // ── Sweep arcs ──
+  sweepArcEl.style.strokeDashoffset  = sweepOffset;
+  sweepArc2El.style.strokeDashoffset = sweepOffset2;
+
+  // Sweep arc intensity by state
+  const sweepOpacity = s === 'idle' ? 0.18 : s === 'listening' ? 0.5 : s === 'thinking' ? 0.65 : s === 'speaking' ? 0.45 : 0.18;
+  sweepArcEl.style.opacity  = sweepOpacity;
+  sweepArc2El.style.opacity = sweepOpacity * 0.45;
+
+  // ── Three.js stars slow drift ──
+  if (!reduced) {
+    stars.rotation.y += dt * 0.008;
+    stars.rotation.x += dt * 0.003;
+  }
+  renderer.render(scene, camera);
+
+  // ── Core canvas ──
+  drawCore(dt);
+
+  // ── Waveform ──
+  drawWaveform(now);
+}
+
+function drawCore(dt) {
+  const s = state.status;
+  coreCtx.clearRect(0, 0, CORE_SIZE, CORE_SIZE);
+
+  const breath = Math.sin(breathPhase);
+  let radius = 72;
+  if (!reducedMotion) {
+    if (s === 'idle')      radius = 72 + breath * 2.5;
+    if (s === 'listening') radius = 78 + breath * 6;
+    if (s === 'thinking')  radius = 75 + Math.abs(breath) * 8;
+    if (s === 'speaking')  radius = 74 + breath * 4;
+  }
+
+  // Outer soft glow halo
+  const haloAlpha = s === 'idle' ? 0.04 : s === 'listening' ? 0.12 : s === 'thinking' ? 0.09 : 0.08;
+  const halo = coreCtx.createRadialGradient(CC, CC, radius * 0.7, CC, CC, radius * 2.2);
+  halo.addColorStop(0,   `rgba(180,210,255,${haloAlpha})`);
+  halo.addColorStop(0.5, `rgba(180,210,255,${(haloAlpha * 0.3).toFixed(4)})`);
+  halo.addColorStop(1,   'rgba(0,0,0,0)');
+  coreCtx.beginPath();
+  coreCtx.arc(CC, CC, radius * 2.2, 0, Math.PI * 2);
+  coreCtx.fillStyle = halo;
+  coreCtx.fill();
+
+  // Ripple rings for listening
+  if (s === 'listening' && !reducedMotion) {
+    for (let i = 0; i < 3; i++) {
+      const rr = rippleRings[i];
+      rr.r += dt * 55;
+      if (rr.r > radius * 2.5 || rr.a <= 0) {
+        rr.r = radius * 1.05;
+        rr.a = 0.35;
+      }
+      rr.a -= dt * 0.18;
+      if (rr.a > 0) {
+        coreCtx.beginPath();
+        coreCtx.arc(CC, CC, rr.r, 0, Math.PI * 2);
+        coreCtx.strokeStyle = `rgba(180,210,255,${Math.max(0, rr.a).toFixed(3)})`;
+        coreCtx.lineWidth = 0.8;
+        coreCtx.stroke();
+      }
+    }
+  }
+
+  // Thinking: rotating arc segments
+  if (s === 'thinking' && !reducedMotion) {
+    for (let i = 0; i < 4; i++) {
+      const a0 = spinAngle + i * Math.PI * 0.5;
+      const a1 = a0 + 0.8;
+      const rr = radius + 8 + i * 4;
+      coreCtx.beginPath();
+      coreCtx.arc(CC, CC, rr, a0, a1);
+      coreCtx.strokeStyle = `rgba(180,210,255,${(0.4 - i * 0.07).toFixed(2)})`;
+      coreCtx.lineWidth = 1 - i * 0.15;
+      coreCtx.stroke();
+    }
+  }
+
+  // Speaking: shimmer waveform ring
+  if (s === 'speaking' && !reducedMotion) {
+    const pts = 120;
+    coreCtx.beginPath();
+    for (let i = 0; i <= pts; i++) {
+      const ang = (i / pts) * Math.PI * 2 - Math.PI * 0.5;
+      const noise = Math.sin(ang * 8 + breathPhase * 3) * 4 + Math.sin(ang * 13 - breathPhase * 2) * 2;
+      const rr = radius + noise;
+      const x = CC + rr * Math.cos(ang);
+      const y = CC + rr * Math.sin(ang);
+      i === 0 ? coreCtx.moveTo(x, y) : coreCtx.lineTo(x, y);
+    }
+    coreCtx.strokeStyle = 'rgba(180,210,255,0.35)';
+    coreCtx.lineWidth = 1;
+    coreCtx.stroke();
+  }
+
+  // Core orb gradient
+  const grad = coreCtx.createRadialGradient(CC - radius*0.2, CC - radius*0.2, 0, CC, CC, radius);
+  const bright = s === 'idle' ? 0.55 : s === 'listening' ? 0.9 : s === 'thinking' ? 0.78 : 0.70;
+  grad.addColorStop(0,   `rgba(240,245,255,${(bright * 0.9).toFixed(2)})`);
+  grad.addColorStop(0.4, `rgba(200,215,255,${(bright * 0.6).toFixed(2)})`);
+  grad.addColorStop(0.75,`rgba(80,100,160,${(bright * 0.3).toFixed(2)})`);
+  grad.addColorStop(1,   `rgba(0,0,0,${(bright * 0.2).toFixed(2)})`);
+  coreCtx.beginPath();
+  coreCtx.arc(CC, CC, radius, 0, Math.PI * 2);
+  coreCtx.fillStyle = grad;
+  coreCtx.fill();
+
+  // Specular highlight
+  coreCtx.beginPath();
+  coreCtx.arc(CC - radius*0.28, CC - radius*0.28, radius * 0.22, 0, Math.PI * 2);
+  coreCtx.fillStyle = `rgba(255,255,255,${(0.12 * bright).toFixed(3)})`;
+  coreCtx.fill();
+
+  // Inner ring line
+  coreCtx.beginPath();
+  coreCtx.arc(CC, CC, radius, 0, Math.PI * 2);
+  coreCtx.strokeStyle = `rgba(180,210,255,${(0.3 * bright).toFixed(2)})`;
+  coreCtx.lineWidth = 0.8;
+  coreCtx.stroke();
+}
+
+function drawWaveform(now) {
+  const s = state.status;
+  const w = waveCanvas.width, h = waveCanvas.height;
+  waveCtx.clearRect(0, 0, w, h);
+
+  const amp = s === 'idle' ? 2 : s === 'listening' ? 8 : s === 'thinking' ? 5 : s === 'speaking' ? 10 : 2;
+  const speed = s === 'thinking' ? 0.006 : s === 'speaking' ? 0.008 : 0.003;
+  const t = now * speed;
+  const cy = h / 2;
+
+  waveCtx.beginPath();
+  for (let x = 0; x < w; x++) {
+    const nx = x / w;
+    const y = cy
+      + Math.sin(nx * 7 + t)   * amp
+      + Math.sin(nx * 13 - t * 1.3) * amp * 0.5
+      + Math.sin(nx * 3  + t * 0.7) * amp * 0.3;
+    x === 0 ? waveCtx.moveTo(x, y) : waveCtx.lineTo(x, y);
+  }
+  const wAlpha = s === 'idle' ? 0.2 : 0.55;
+  waveCtx.strokeStyle = `rgba(180,210,255,${wAlpha})`;
+  waveCtx.lineWidth = 1;
+  waveCtx.stroke();
+}
+
+// ─── Kick off ─────────────────────────────────────────────────────────────────
+requestAnimationFrame(tick);
+
+// ─── (Future hook) Real audio levels would feed drawCore's amplitude here ──
+// window.__zeroAudioAmplitude = 0;  // set by audio pipeline when available
+</script>
+</body>
+</html>
