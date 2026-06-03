@@ -1,0 +1,20 @@
+# Zero runtime data — never commit
+data/
+logs/
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# models / large assets (downloaded on first run)
+models/
+*.onnx
+*.pt
+
+# local config with any secrets
+.env
+config.local.toml
