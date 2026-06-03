@@ -1,9 +1,9 @@
 [wake]
-# Custom "hey zero" model (trained locally). Threshold raised to 0.7 to suppress
-# false wakes (the model is ~153 FP/hr at 0.5 — see wake-training/README "Option B").
-# To switch back to the bulletproof built-in: model = "hey_jarvis", threshold = 0.5
+# Custom "hey zero" model (Option B, ACAV100M-trained): ~1.77 false-wakes/hr, recall ~0.60.
+# Threshold 0.5 favours recall now that the model's own false-positive rate is tiny.
+# If it ever over-triggers, raise toward 0.6; to use the built-in instead: model = "hey_jarvis"
 model = "zero/models/hey_zero.onnx"
-threshold = 0.7
+threshold = 0.5
 
 [stt]
 model = "small"           # tiny|base|small|medium|large-v3
