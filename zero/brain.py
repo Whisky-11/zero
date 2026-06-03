@@ -5,6 +5,7 @@ from claude_agent_sdk import (ClaudeSDKClient, ClaudeAgentOptions,
                               AssistantMessage, TextBlock, HookMatcher)
 from zero.memory import build_memory_mcp
 from zero.gate import build_pretooluse_hook
+from zero.profile import build_user_profile
 
 
 class SubscriptionKeyError(RuntimeError):
@@ -19,10 +20,15 @@ class Brain:
         self._cfg = cfg
         self._on_text = on_text          # callback(sentence) for streaming TTS
         persona = Path("prompts/zero.md").read_text(encoding="utf-8")
+        user_profile = build_user_profile()
+        if user_profile:
+            system_prompt = persona + "\n\n## About Ahmad (from memory)\n" + user_profile
+        else:
+            system_prompt = persona
         memory_mcp = build_memory_mcp(store)
         hook = build_pretooluse_hook(cfg, confirm_aloud)
         self._options = ClaudeAgentOptions(
-            system_prompt=persona,
+            system_prompt=system_prompt,
             model=cfg.brain.model,
             mcp_servers={"memory": memory_mcp},
             allowed_tools=["Read", "Glob", "Grep", "Bash", "Write", "Edit",
