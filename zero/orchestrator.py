@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, threading, queue, numpy as np
+import threading, queue, numpy as np
 from zero.config import load_config
 from zero.audio import Mic
 from zero.wake import WakeListener, FrameBuffer
@@ -58,7 +58,7 @@ class Orchestrator:
         self.store.log_turn("user", text)
         self._state("thinking", text)
         try:
-            reply = asyncio.run(self.brain.ask_text(text))
+            reply = self.brain.ask(text)
         except Exception as e:
             self.voice.speak("Apologies, Ahmad, I hit an error."); self._state("idle"); return
         self.store.log_turn("assistant", reply)

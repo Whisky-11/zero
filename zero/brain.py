@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os
+import asyncio, threading, os
 from pathlib import Path
 from claude_agent_sdk import (ClaudeSDKClient, ClaudeAgentOptions,
                               AssistantMessage, TextBlock, HookMatcher)
@@ -34,12 +34,18 @@ class Brain:
         self._client = ClaudeSDKClient(options=self._options)
         self._open = False
 
+        # Dedicated event loop running in a background daemon thread.
+        # All async work (including client open/query/receive) runs on this loop,
+        # so the warm client is never bound to a short-lived asyncio.run() loop.
+        self._loop = asyncio.new_event_loop()
+        threading.Thread(target=self._loop.run_forever, daemon=True).start()
+
     async def _ensure(self):
         if not self._open:
             await self._client.__aenter__(); self._open = True
 
-    async def ask_text(self, prompt: str) -> str:
-        """Send a turn; return the full reply (and stream sentences via on_text)."""
+    async def _ask(self, prompt: str) -> str:
+        """Coroutine that runs on self._loop — ensure client, query, collect text."""
         await self._ensure()
         await self._client.query(prompt)
         full = []
@@ -52,6 +58,15 @@ class Brain:
                             self._on_text(block.text)
         return "".join(full).strip()
 
-    async def aclose(self):
+    def ask(self, prompt: str) -> str:
+        """Synchronous public API — schedules _ask on the dedicated loop and waits."""
+        fut = asyncio.run_coroutine_threadsafe(self._ask(prompt), self._loop)
+        return fut.result()
+
+    async def _aclose(self):
         if self._open:
             await self._client.__aexit__(None, None, None); self._open = False
+
+    def aclose(self):
+        """Schedule async teardown on the dedicated loop (fire-and-forget is fine)."""
+        asyncio.run_coroutine_threadsafe(self._aclose(), self._loop)
