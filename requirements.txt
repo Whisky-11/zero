@@ -1,0 +1,11 @@
+claude-agent-sdk>=0.1.0
+openwakeword>=0.6.0
+faster-whisper>=1.0.0
+silero-vad>=5.1
+kokoro>=0.9.4
+soundfile>=0.12
+sounddevice>=0.4.6
+websockets>=14.0
+numpy>=1.26
+tomli>=2.0 ; python_version < "3.11"
+pytest>=8.0

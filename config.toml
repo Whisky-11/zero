@@ -1,0 +1,29 @@
+[wake]
+model = "hey_jarvis"      # built-in; swap to "zero" (custom .onnx path) later
+threshold = 0.5
+
+[stt]
+model = "small"           # tiny|base|small|medium|large-v3
+device = "cuda"
+compute_type = "float16"
+min_silence_ms = 600
+
+[voice]
+lang_code = "b"           # British English
+voice = "bm_george"
+speed = 1.0
+
+[brain]
+model = "claude-opus-4-7"
+trivial_model = "claude-3-5-haiku-20241022"
+user_name = "Ahmad"
+
+[hud]
+ws_port = 8765
+http_port = 911           # the Porsche reference; HUD page served here
+
+[gate]
+# tool_input substrings that force a spoken confirmation
+confirm_patterns = ["rm ", "del ", "rmdir", "git push", "git reset --hard", "shutdown", "Remove-Item", "format ", "DROP TABLE", "kill "]
+# patterns Zero refuses outright, even if asked
+never_patterns = ["rm -rf /", "rm -rf /*", ":(){", "mkfs", "format c:"]
