@@ -18,3 +18,7 @@ models/
 # local config with any secrets
 .env
 config.local.toml
+
+# training workspace + install log (not part of the app)
+wake-training/
+install.log

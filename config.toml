@@ -1,0 +1,32 @@
+[wake]
+# Custom "hey zero" model (trained locally). Threshold raised to 0.7 to suppress
+# false wakes (the model is ~153 FP/hr at 0.5 — see wake-training/README "Option B").
+# To switch back to the bulletproof built-in: model = "hey_jarvis", threshold = 0.5
+model = "zero/models/hey_zero.onnx"
+threshold = 0.7
+
+[stt]
+model = "small"           # tiny|base|small|medium|large-v3
+device = "cuda"
+compute_type = "float16"
+min_silence_ms = 600
+
+[voice]
+lang_code = "b"           # British English
+voice = "bm_george"
+speed = 1.0
+
+[brain]
+model = "claude-opus-4-7"
+trivial_model = "claude-3-5-haiku-20241022"
+user_name = "Ahmad"
+
+[hud]
+ws_port = 8765
+http_port = 911           # the Porsche reference; HUD page served here
+
+[gate]
+# tool_input substrings that force a spoken confirmation
+confirm_patterns = ["rm ", "del ", "rmdir", "git push", "git reset --hard", "shutdown", "Remove-Item", "format ", "DROP TABLE", "kill "]
+# patterns Zero refuses outright, even if asked
+never_patterns = ["rm -rf /", "rm -rf /*", ":(){", "mkfs", "format c:"]
