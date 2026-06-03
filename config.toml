@@ -6,10 +6,10 @@ model = "zero/models/hey_zero.onnx"
 threshold = 0.5
 
 [stt]
-model = "small"           # tiny|base|small|medium|large-v3
+model = "base"            # tiny|base|small|medium|large-v3 (base ~2x faster than small, fine for commands)
 device = "cuda"
 compute_type = "float16"
-min_silence_ms = 600
+min_silence_ms = 400      # silence after you stop talking before it cuts off (lower = snappier)
 
 [voice]
 lang_code = "b"           # British English
@@ -17,8 +17,10 @@ voice = "bm_george"
 speed = 1.0
 
 [brain]
-model = "claude-opus-4-7"
-trivial_model = "claude-3-5-haiku-20241022"
+# Sonnet for snappy voice latency. For max speed use "claude-haiku-4-5-20251001";
+# for max smarts (slower) "claude-opus-4-8".
+model = "claude-sonnet-4-6"
+trivial_model = "claude-haiku-4-5-20251001"
 user_name = "Ahmad"
 
 [hud]
