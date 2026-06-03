@@ -29,17 +29,33 @@ class Orchestrator:
     def _state(self, status, activity=""):
         self.hud.push_state({"status": status, "activity": activity})
 
+    # ~31 frames/sec (512 samples @ 16 kHz). Idle-frame budgets:
+    _IDLE_FIRST = 330      # ~10.5 s to start speaking after wake
+    _IDLE_FOLLOWUP = 200   # ~6.5 s to answer / continue without re-waking
+    _IDLE_CONFIRM = 200    # ~6.5 s to say yes/no, else treated as "no"
+
     def _confirm_aloud(self, question: str) -> bool:
         self._state("speaking", question); self.voice.speak(question)
-        text = self._listen_once().lower()
+        text = self._listen_once(self._IDLE_CONFIRM).lower()   # silence/timeout -> deny
         return any(w in text for w in ("yes", "do it", "proceed", "go ahead", "confirm"))
 
-    def _listen_once(self) -> str:
+    def _listen_once(self, max_idle_frames: int = 0) -> str:
+        """Capture one utterance. Flushes stale audio first so it hears *fresh*
+        speech. If max_idle_frames>0, return '' when no speech starts in time."""
         self.rec.reset()
+        self.mic.flush()
+        idle = 0
         for chunk in self.mic.frames():
             utter = self.rec.feed(chunk)
             if utter is not None:
                 return self.stt.transcribe(utter)
+            if max_idle_frames:
+                if self.rec._collecting:
+                    idle = 0
+                else:
+                    idle += 1
+                    if idle >= max_idle_frames:
+                        return ""
         return ""
 
     def run(self) -> None:
@@ -48,17 +64,23 @@ class Orchestrator:
             for frame in self.fb.push(chunk):
                 if self.wake.feed(frame):
                     self._handle_turn()
-                    self._state("idle")
 
     def _handle_turn(self) -> None:
-        self._state("listening")
-        text = self._listen_once()
-        if not text:
-            self._state("idle"); return
-        self.store.log_turn("user", text)
-        self._state("thinking", text)
-        try:
-            reply = self.brain.ask(text)
-        except Exception as e:
-            self.voice.speak("Apologies, Ahmad, I hit an error."); self._state("idle"); return
-        self.store.log_turn("assistant", reply)
+        """One wake opens a conversation: keep listening for follow-ups (no wake
+        word) until Ahmad goes quiet, then return to wake-listening."""
+        follow = False
+        while True:
+            self._state("listening")
+            text = self._listen_once(self._IDLE_FOLLOWUP if follow else self._IDLE_FIRST)
+            if not text:
+                break
+            self.store.log_turn("user", text)
+            self._state("thinking", text)
+            try:
+                reply = self.brain.ask(text)
+            except Exception:
+                self.voice.speak("Apologies, Ahmad, I hit an error."); break
+            self.store.log_turn("assistant", reply)
+            follow = True
+        self.mic.flush()            # drop audio captured during the turn
+        self._state("idle")

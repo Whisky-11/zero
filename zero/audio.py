@@ -30,6 +30,15 @@ class Mic:
         while True:
             yield self._q.get()
 
+    def flush(self) -> None:
+        """Drop buffered audio captured while we weren't actively listening
+        (the command tail, Zero's own voice, silence during thinking)."""
+        try:
+            while True:
+                self._q.get_nowait()
+        except queue.Empty:
+            pass
+
 
 def play(audio_f32: np.ndarray, samplerate: int = 24000, block: bool = True) -> None:
     sd.play(audio_f32, samplerate=samplerate)
