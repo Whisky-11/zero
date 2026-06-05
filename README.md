@@ -1,17 +1,21 @@
 # Zero
 
-Zero is Ahmad's personal voice assistant — a JARVIS-style agent running locally on Windows. Say the wake word, speak, and Zero answers in a British voice with full tool access (shell, files, web) and persistent memory.
+Zero is Ahmad's personal voice assistant — a JARVIS-style agent running locally. Say the wake word, speak, and Zero answers in a British voice with full tool access (shell, files, web) and persistent memory.
+
+Runs on **Windows** (CUDA/NVIDIA) and **macOS** (CPU/MPS, no CUDA required).
 
 ## Quickstart
 
-### Prerequisites
+### Windows setup
+
+#### Prerequisites
 
 1. **Python 3.10** — Zero's venv targets 3.10.
 2. **espeak-ng** — Required by Kokoro TTS. Download the MSI from https://github.com/espeak-ng/espeak-ng/releases and install it. Verify: `espeak-ng --version`.
 3. **CUDA GPU** — faster-whisper uses CUDA for transcription. CUDA 12.1 and cuDNN 9 must be installed.
 4. **Claude Code subscription** — Zero uses the Claude Code CLI (subscription auth). Do **NOT** set `ANTHROPIC_API_KEY` — Zero asserts this key is unset and will refuse to start if it is set (to avoid accidental per-token billing).
 
-### Install
+#### Install
 
 ```powershell
 # From C:\Users\moze1\zero
@@ -21,6 +25,24 @@ pip install -r requirements.txt
 pip install torch --index-url https://download.pytorch.org/whl/cu121
 python -c "import openwakeword; openwakeword.utils.download_models()"
 ```
+
+### macOS setup
+
+```bash
+brew install python@3.10 espeak-ng portaudio
+cd zero && python3.10 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install torch torchaudio          # plain (CPU/MPS) build, no CUDA index on Mac
+python -c "import openwakeword; openwakeword.utils.download_models()"
+python -m zero                         # say "hey jarvis" (or "hey zero" if you copied the model)
+bash install.sh                        # optional: autostart via LaunchAgent
+```
+
+**macOS notes:**
+- STT runs on **CPU** (no CUDA), so it is slower. Consider setting `[stt] model = "tiny"` or `"base"` in `config.toml` for speed.
+- Do **NOT** set `ANTHROPIC_API_KEY` — Zero uses the Claude Code subscription; a set key causes startup failure.
+- The custom `hey_zero.onnx` wake model is gitignored. A fresh clone wakes on **"hey jarvis"** until you copy the model into `zero/models/`.
+- `[stt] device = "auto"` (the default) auto-selects CUDA on Windows/NVIDIA and CPU on Mac — no manual change needed.
 
 ### Run (interactive voice mode)
 

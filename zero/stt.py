@@ -34,6 +34,14 @@ class Recorder:
 
 class Transcriber:
     def __init__(self, model: str, device: str, compute_type: str) -> None:
+        if device == "auto":
+            try:
+                import torch
+                cuda = torch.cuda.is_available()
+            except Exception:
+                cuda = False
+            device = "cuda" if cuda else "cpu"
+            compute_type = "float16" if cuda else "int8"
         self._model = WhisperModel(model, device=device, compute_type=compute_type)
 
     def transcribe(self, audio_f32: np.ndarray) -> str:

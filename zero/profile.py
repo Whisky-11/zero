@@ -3,7 +3,30 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-_VAULT_DIR = Path(r"C:\Users\moze1\.claude\projects\C--Users-moze1\memory")
+
+def _find_memory_dir() -> Path | None:
+    """Locate the memory/ directory inside ~/.claude/projects/ that contains MEMORY.md.
+
+    Works on Windows (C:\\Users\\<name>\\.claude\\...) and macOS (~/.claude/...).
+    Prefers the candidate with MEMORY.md; if multiple exist, picks the largest by
+    file-count so we always get the main vault, not a stale shard.
+    """
+    base = Path.home() / ".claude" / "projects"
+    if not base.exists():
+        return None
+    # sort: has MEMORY.md first, then by descending child-file count (larger = richer vault)
+    cands = sorted(
+        base.glob("*/memory"),
+        key=lambda p: ((p / "MEMORY.md").exists(), sum(1 for _ in p.iterdir()) if p.is_dir() else 0),
+        reverse=True,
+    )
+    for d in cands:
+        if (d / "MEMORY.md").exists():
+            return d
+    return None
+
+
+_VAULT_DIR: Path | None = _find_memory_dir()
 
 
 def _strip_frontmatter(text: str) -> str:
@@ -43,7 +66,7 @@ def build_user_profile() -> str:
     Reads MEMORY.md (the index) and any user-*.md files. Returns "" if the
     vault directory is absent so callers never crash.
     """
-    if not _VAULT_DIR.exists():
+    if _VAULT_DIR is None or not _VAULT_DIR.exists():
         return ""
 
     sections: list[str] = []

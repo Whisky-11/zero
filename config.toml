@@ -7,7 +7,7 @@ threshold = 0.5
 
 [stt]
 model = "base"            # tiny|base|small|medium|large-v3 (base ~2x faster than small, fine for commands)
-device = "cuda"
+device = "auto"           # auto = CUDA if available (Windows/NVIDIA) else CPU (Mac)
 compute_type = "float16"
 min_silence_ms = 400      # silence after you stop talking before it cuts off (lower = snappier)
 
