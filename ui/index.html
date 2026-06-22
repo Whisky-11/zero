@@ -383,6 +383,16 @@
   <!-- Right panel -->
   <div class="side-panel right">
     <div>
+      <div class="instr-label">Force OS</div>
+      <div class="instr-value" id="os-health">—</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="os-bar" style="width:0%"></div></div>
+    </div>
+    <div>
+      <div class="instr-label">Needs You</div>
+      <div class="instr-value" id="os-inbox">—</div>
+      <div class="instr-bar"><div class="instr-bar-fill" id="os-inbox-bar" style="width:0%"></div></div>
+    </div>
+    <div>
       <div class="instr-label">Mode</div>
       <div class="instr-value" id="mode-val">PASSIVE</div>
       <div class="instr-bar"><div class="instr-bar-fill" style="width:35%"></div></div>
@@ -444,6 +454,34 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// ─── Force OS link ──────────────────────────────────────────────────────────────
+// Poll the Force AI OS dashboard (the "common mind" on :7717) for live health +
+// the count of items that need Ahmad. Degrades gracefully when the OS is offline.
+const osHealthEl = document.getElementById('os-health');
+const osBarEl = document.getElementById('os-bar');
+const osInboxEl = document.getElementById('os-inbox');
+const osInboxBarEl = document.getElementById('os-inbox-bar');
+async function pollOS() {
+  try {
+    const d = await (await fetch('http://127.0.0.1:7717/api/state', { cache: 'no-store' })).json();
+    const subs = d.subsystems || [];
+    const green = subs.filter(s => s.ok === 'true').length;
+    const bad = subs.filter(s => s.ok === 'false').length;
+    const pct = subs.length ? Math.round((green / subs.length) * 100) : 0;
+    if (osHealthEl) osHealthEl.textContent = bad ? `${bad} DOWN` : (green === subs.length ? 'ALL GREEN' : `${green}/${subs.length}`);
+    if (osBarEl) osBarEl.style.width = pct + '%';
+    const inbox = (d.inbox && d.inbox.count) || 0;
+    if (osInboxEl) { osInboxEl.textContent = inbox ? String(inbox) : 'CLEAR'; osInboxEl.style.color = inbox ? 'var(--accent)' : ''; }
+    if (osInboxBarEl) osInboxBarEl.style.width = Math.min(inbox * 25, 100) + '%';
+  } catch (e) {
+    if (osHealthEl) osHealthEl.textContent = 'OFFLINE';
+    if (osBarEl) osBarEl.style.width = '0%';
+    if (osInboxEl) osInboxEl.textContent = '—';
+  }
+}
+pollOS();
+setInterval(pollOS, 5000);
 
 // ─── Uptime ───────────────────────────────────────────────────────────────────
 const uptimeEl = document.getElementById('uptime-val');
