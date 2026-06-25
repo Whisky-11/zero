@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZERO — HUD</title>
+<title>ZERO</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --fg:        #e8eaf0;
-    --fg-dim:    #7a8090;
-    --fg-faint:  #363a42;
-    --accent:    #b8d0ff;
-    --accent-lo: rgba(180, 210, 255, 0.08);
-    --bg:        #000000;
-    --rail-bg:   rgba(10, 12, 18, 0.85);
+    --fg:       #f4f4f6;   /* near-white */
+    --fg-dim:   #9a9aa0;   /* grey */
+    --fg-faint: #4a4a50;   /* dim grey */
+    --line:     rgba(255,255,255,0.09);
+    --line-2:   rgba(255,255,255,0.04);
+    --bg:       #050505;
+    --panel:    rgba(18,18,20,0.78);
+    --accent:   #ffffff;
+    --good:     #d8d8d8;
+    --warn:     #ffffff;
   }
 
   html, body {
@@ -23,893 +26,434 @@
     overflow: hidden;
     font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     color: var(--fg);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
   }
+  #bg-canvas { position: fixed; inset: 0; z-index: 0; }
 
-  /* ── WebGL canvas ── */
-  #bg-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-  }
+  /* shell: nav rail | content */
+  #shell { position: fixed; inset: 0; z-index: 1; display: grid; grid-template-columns: 64px 1fr; }
 
-  /* ── Main HUD layout ── */
-  #hud {
-    position: fixed;
-    inset: 0;
-    z-index: 1;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    grid-template-columns: 180px 1fr 180px;
-    pointer-events: none;
+  /* ── nav rail ── */
+  #nav {
+    border-right: 1px solid var(--line);
+    background: rgba(0,0,0,0.4);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 18px 0; gap: 4px;
   }
+  #nav .brand {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.3em;
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    margin-bottom: 22px; color: var(--fg);
+  }
+  .nav-btn {
+    width: 46px; height: 46px; border: 1px solid transparent; border-radius: 8px;
+    background: none; color: var(--fg-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; letter-spacing: 0.1em; transition: all .2s;
+  }
+  .nav-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.4; }
+  .nav-btn:hover { color: var(--fg); border-color: var(--line); }
+  .nav-btn.active { color: #000; background: var(--fg); border-color: var(--fg); }
+  #nav .spacer { flex: 1; }
+  #nav .link-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fg-faint); transition: all .4s; }
+  #nav .link-dot.live { background: var(--accent); box-shadow: 0 0 9px var(--accent); }
 
-  /* ── Corner bracket decorations ── */
-  .corner {
-    position: fixed;
-    width: 48px;
-    height: 48px;
-    z-index: 2;
-    opacity: 0.55;
+  /* ── content area ── */
+  #content { position: relative; overflow: hidden; }
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; border-bottom: 1px solid var(--line); z-index: 5;
+    background: linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0));
   }
-  .corner svg { width: 100%; height: 100%; }
-  .corner--tl { top: 16px; left: 16px; }
-  .corner--tr { top: 16px; right: 16px; transform: scaleX(-1); }
-  .corner--bl { bottom: 16px; left: 16px; transform: scaleY(-1); }
-  .corner--br { bottom: 16px; right: 16px; transform: scale(-1,-1); }
+  #view-title { font-size: 11px; letter-spacing: 0.5em; text-transform: uppercase; color: var(--fg-dim); }
+  #view-title b { color: var(--fg); }
+  #clock { font-size: 11px; letter-spacing: 0.25em; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
 
-  /* ── Top bar ── */
-  #top-bar {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 60px 0;
-    border-bottom: 1px solid rgba(180,210,255,0.08);
-  }
+  .view { position: absolute; inset: 52px 0 0 0; display: none; }
+  .view.active { display: block; }
 
-  .wordmark {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.55em;
-    text-transform: uppercase;
-    color: var(--fg-dim);
-  }
-  .wordmark span { color: var(--fg); }
+  /* ── CORE view ── */
+  #view-core { display: none; }
+  #view-core.active { display: flex; }
+  #view-core { flex-direction: row; }
+  .core-rail { width: 200px; padding: 28px 20px; display: flex; flex-direction: column; gap: 22px; opacity: .85; }
+  .core-rail.right { margin-left: auto; align-items: flex-end; text-align: right; }
+  .instr-label { font-size: 8.5px; letter-spacing: 0.4em; text-transform: uppercase; color: var(--fg-faint); margin-bottom: 5px; }
+  .instr-value { font-size: 13px; letter-spacing: 0.18em; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+  .instr-bar { width: 100%; height: 2px; background: var(--fg-faint); margin-top: 6px; position: relative; overflow: hidden; }
+  .instr-bar-fill { position: absolute; inset: 0 auto 0 0; height: 100%; background: var(--fg-dim); width: 40%; transition: width 1s linear; }
+  #core-centre { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #rings-wrap { position: relative; width: 320px; height: 320px; }
+  #rings-svg, #core-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #core-canvas { border-radius: 50%; }
+  #state-wrap { margin-top: 26px; text-align: center; }
+  #state-label { font-size: 12px; letter-spacing: 0.6em; text-transform: uppercase; color: var(--fg-dim); transition: color .4s; padding-left: .6em; }
+  #state-label.listening, #state-label.thinking, #state-label.speaking { color: var(--fg); }
+  #state-sub { font-size: 9px; letter-spacing: 0.35em; text-transform: uppercase; color: var(--fg-faint); margin-top: 6px; }
 
-  #clock {
-    font-size: 11px;
-    letter-spacing: 0.3em;
-    color: var(--fg-dim);
-    font-variant-numeric: tabular-nums;
-  }
+  /* ── CONNECTIONS view ── */
+  #conn-svg { width: 100%; height: 100%; }
+  .edge { stroke: var(--line); stroke-width: 1.2; }
+  .edge-flow { stroke: rgba(255,255,255,0.45); stroke-width: 1.6; stroke-dasharray: 6 12; fill: none; }
+  .node-box { fill: rgba(20,20,22,0.94); stroke: var(--fg-faint); stroke-width: 1.2; }
+  .node-box.zero  { stroke: var(--accent); stroke-width: 1.8; }
+  .node-box.bus   { stroke: var(--fg-dim); stroke-dasharray: 5 4; }
+  .node-label { fill: var(--fg); font-size: 15px; letter-spacing: 0.02em; }
+  .edge-label { fill: var(--fg-dim); font-size: 11px; letter-spacing: 0.02em; }
+  #conn-legend { position: absolute; bottom: 20px; left: 28px; font-size: 9px; letter-spacing: 0.2em; color: var(--fg-dim); text-transform: uppercase; }
+  #conn-legend span { color: var(--fg); }
 
-  #link-badge {
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--fg-dim);
+  /* ── VAULT view ── */
+  #vault { grid-template-columns: 360px 1fr; }
+  #vault.active { display: grid; }
+  #vault-list { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  #vault-search-wrap { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  #vault-search {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    color: var(--fg); padding: 9px 12px; font-size: 12px; letter-spacing: 0.08em; border-radius: 6px; outline: none;
   }
-  #link-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #445;
-    transition: background 0.4s, box-shadow 0.4s;
-  }
-  #link-dot.live {
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-  }
+  #vault-search::placeholder { color: var(--fg-faint); }
+  #vault-count { padding: 8px 16px; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--fg-faint); }
+  #vault-items { flex: 1; overflow-y: auto; }
+  .vault-scope { padding: 10px 16px 4px; font-size: 9px; letter-spacing: 0.35em; text-transform: uppercase; color: var(--fg-dim); position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line-2); }
+  .vault-item { padding: 9px 16px; border-bottom: 1px solid var(--line-2); cursor: pointer; transition: background .15s; }
+  .vault-item:hover { background: rgba(255,255,255,0.04); }
+  .vault-item.active { background: rgba(255,255,255,0.09); border-left: 2px solid var(--accent); }
+  .vault-item .vi-name { font-size: 11.5px; color: var(--fg); letter-spacing: 0.02em; word-break: break-word; }
+  .vault-item .vi-hint { font-size: 10px; color: var(--fg-dim); margin-top: 3px; line-height: 1.4; }
+  #vault-doc { overflow-y: auto; padding: 32px 44px; }
+  #vault-doc .doc-meta { font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--fg-faint); margin-bottom: 18px; }
+  .md h1 { font-size: 22px; margin: 18px 0 12px; letter-spacing: 0.02em; }
+  .md h2 { font-size: 17px; margin: 22px 0 10px; color: var(--fg); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .md h3 { font-size: 14px; margin: 16px 0 8px; color: var(--fg-dim); letter-spacing: 0.05em; text-transform: uppercase; }
+  .md p, .md li { font-size: 13.5px; line-height: 1.7; color: #cfcfd4; letter-spacing: 0.01em; }
+  .md ul { margin: 8px 0 8px 22px; }
+  .md code { background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: 'SF Mono', Menlo, monospace; color: #fff; }
+  .md a, .md .wikilink { color: #fff; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  .md hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
+  #vault-empty { color: var(--fg-faint); font-size: 13px; letter-spacing: 0.1em; text-align: center; margin-top: 80px; }
 
-  /* ── Left / right instrument panels ── */
-  .side-panel {
-    padding: 24px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    opacity: 0.7;
-  }
-  .side-panel.right { align-items: flex-end; text-align: right; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
 
-  .instr-label {
-    font-size: 9px;
-    letter-spacing: 0.45em;
-    text-transform: uppercase;
-    color: var(--fg-faint);
-    margin-bottom: 4px;
-  }
-  .instr-value {
-    font-size: 13px;
-    letter-spacing: 0.2em;
-    color: var(--fg-dim);
-    font-variant-numeric: tabular-nums;
-  }
-  .instr-bar {
-    width: 100%;
-    height: 2px;
-    background: var(--fg-faint);
-    margin-top: 6px;
-    position: relative;
-    overflow: hidden;
-  }
-  .instr-bar-fill {
-    position: absolute;
-    top: 0; left: 0;
-    height: 100%;
-    background: var(--fg-dim);
-    width: 60%;
-    transition: width 1s linear;
-  }
-
-  /* ── Centre core area ── */
-  #centre {
-    grid-column: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    padding: 32px 0;
-  }
-
-  /* ── Instrument rings (SVG-based) ── */
-  #rings-wrap {
-    position: relative;
-    width: 340px;
-    height: 340px;
-    flex-shrink: 0;
-  }
-  #rings-svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
-  #core-canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-  }
-
-  /* ── State label ── */
-  #state-wrap {
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-  }
-  #state-label {
-    font-size: 11px;
-    letter-spacing: 0.6em;
-    text-transform: uppercase;
-    color: var(--fg-dim);
-    transition: color 0.4s;
-    padding-left: 0.6em; /* optical kern for letter-spacing */
-  }
-  #state-label.listening { color: var(--accent); }
-  #state-label.thinking  { color: var(--fg); }
-  #state-label.speaking  { color: var(--fg); }
-
-  #state-sub {
-    font-size: 9px;
-    letter-spacing: 0.35em;
-    text-transform: uppercase;
-    color: var(--fg-faint);
-  }
-
-  /* ── Activity rail ── */
-  #rail-wrap {
-    grid-column: 1 / -1;
-    background: var(--rail-bg);
-    border-top: 1px solid rgba(180,210,255,0.06);
-    padding: 10px 60px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    min-height: 46px;
-  }
-
-  #rail-tag {
-    font-size: 9px;
-    letter-spacing: 0.45em;
-    text-transform: uppercase;
-    color: var(--fg-faint);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  #rail-track {
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-    height: 18px;
-  }
-
-  #rail-text {
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    color: var(--fg-dim);
-    white-space: nowrap;
-    position: absolute;
-    top: 0; left: 0;
-    transition: opacity 0.35s;
-  }
-
-  #waveform-canvas {
-    flex-shrink: 0;
-    opacity: 0.5;
-  }
-
-  /* ── Reduced motion ── */
-  @media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
 </style>
-
-<!-- Import map for Three.js -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-  }
-}
-</script>
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }</script>
 </head>
 <body>
-
-<!-- WebGL background -->
 <canvas id="bg-canvas"></canvas>
 
-<!-- Corner brackets -->
-<div class="corner corner--tl">
-  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
-    <polyline points="0,48 0,0 48,0"/>
-    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
-  </svg>
+<div id="shell">
+  <!-- nav rail -->
+  <div id="nav">
+    <div class="brand">ZERO</div>
+    <button class="nav-btn active" data-view="core" title="Core">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/></svg>
+    </button>
+    <button class="nav-btn" data-view="conn" title="Connections">
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7 8l4 8M17 8l-4 8M8 6h8"/></svg>
+    </button>
+    <button class="nav-btn" data-view="vault" title="Vault">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 9h16M9 9v11"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <div class="link-dot" id="link-dot" title="voice link"></div>
+  </div>
+
+  <!-- content -->
+  <div id="content">
+    <div id="topbar">
+      <div id="view-title"><b>ZERO</b> / NEURAL CORE</div>
+      <div id="clock">--:--:--</div>
+    </div>
+
+    <!-- CORE -->
+    <div id="view-core" class="view active">
+      <div class="core-rail left">
+        <div><div class="instr-label">State</div><div class="instr-value" id="ci-state">IDLE</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-state-bar"></div></div></div>
+        <div><div class="instr-label">Voice link</div><div class="instr-value" id="ci-link">OFFLINE</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-link-bar"></div></div></div>
+        <div><div class="instr-label">Sessions</div><div class="instr-value" id="ci-sess">000</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-sess-bar"></div></div></div>
+        <div><div class="instr-label">Uptime</div><div class="instr-value" id="ci-uptime">00:00</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-uptime-bar"></div></div></div>
+      </div>
+
+      <div id="core-centre">
+        <div id="rings-wrap">
+          <svg id="rings-svg" viewBox="0 0 340 340">
+            <circle cx="170" cy="170" r="162" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+            <g id="ticks-outer" stroke="rgba(255,255,255,0.22)" stroke-linecap="round"></g>
+            <circle cx="170" cy="170" r="140" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+            <circle id="sweep-arc" cx="170" cy="170" r="128" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-dasharray="40 766" stroke-linecap="round"/>
+            <circle id="sweep-arc2" cx="170" cy="170" r="128" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.8" stroke-dasharray="20 786" stroke-dashoffset="383" stroke-linecap="round"/>
+            <line x1="8" y1="170" x2="46" y2="170" stroke="rgba(255,255,255,0.12)"/><line x1="294" y1="170" x2="332" y2="170" stroke="rgba(255,255,255,0.12)"/>
+            <line x1="170" y1="8" x2="170" y2="46" stroke="rgba(255,255,255,0.12)"/><line x1="170" y1="294" x2="170" y2="332" stroke="rgba(255,255,255,0.12)"/>
+            <circle id="glow-ring" cx="170" cy="170" r="100" fill="none" stroke="rgba(255,255,255,0)" stroke-width="30"/>
+            <circle cx="170" cy="170" r="85" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.8"/>
+          </svg>
+          <canvas id="core-canvas"></canvas>
+        </div>
+        <div id="state-wrap"><div id="state-label">IDLE</div><div id="state-sub">NEURAL STANDBY</div></div>
+      </div>
+
+      <div class="core-rail right">
+        <div><div class="instr-label">Force OS</div><div class="instr-value" id="ci-os">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-os-bar"></div></div></div>
+        <div><div class="instr-label">Needs you</div><div class="instr-value" id="ci-inbox">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-inbox-bar"></div></div></div>
+        <div><div class="instr-label">Vault</div><div class="instr-value" id="ci-vault">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-vault-bar"></div></div></div>
+        <div><div class="instr-label">Voice engine</div><div class="instr-value">KOKORO</div><div class="instr-bar"><div class="instr-bar-fill" style="width:90%"></div></div></div>
+      </div>
+    </div>
+
+    <!-- CONNECTIONS -->
+    <div id="view-conn" class="view">
+      <svg id="conn-svg" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="conn-legend">ONE NERVOUS SYSTEM — <span id="conn-os">OS —</span> · <span id="conn-vault">VAULT —</span> · STATE BUS = <span>~/.whisky-os-state</span></div>
+    </div>
+
+    <!-- VAULT -->
+    <div id="vault" class="view">
+      <div id="vault-list">
+        <div id="vault-search-wrap"><input id="vault-search" placeholder="search memory + vault…" autocomplete="off"></div>
+        <div id="vault-count">—</div>
+        <div id="vault-items"></div>
+      </div>
+      <div id="vault-doc"><div id="vault-empty">select a memory to read it</div></div>
+    </div>
+  </div>
 </div>
-<div class="corner corner--tr">
-  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
-    <polyline points="0,48 0,0 48,0"/>
-    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
-  </svg>
-</div>
-<div class="corner corner--bl">
-  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
-    <polyline points="0,48 0,0 48,0"/>
-    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
-  </svg>
-</div>
-<div class="corner corner--br">
-  <svg viewBox="0 0 48 48" fill="none" stroke="#b8d0ff" stroke-width="1">
-    <polyline points="0,48 0,0 48,0"/>
-    <polyline points="0,36 0,0 36,0" stroke-width="0.4" stroke-dasharray="2,4"/>
-  </svg>
-</div>
-
-<!-- HUD grid -->
-<div id="hud">
-
-  <!-- Top bar -->
-  <div id="top-bar">
-    <div class="wordmark"><span>ZERO</span> &nbsp;/ NEURAL CORE</div>
-    <div id="clock">--:--:--</div>
-    <div id="link-badge">
-      <div id="link-dot"></div>
-      <span id="link-label">LINK OFFLINE</span>
-    </div>
-  </div>
-
-  <!-- Left panel -->
-  <div class="side-panel left">
-    <div>
-      <div class="instr-label">Session</div>
-      <div class="instr-value" id="session-counter">000</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="sess-bar" style="width:20%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Latency</div>
-      <div class="instr-value" id="latency-val">—&nbsp;ms</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="lat-bar" style="width:10%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Memory</div>
-      <div class="instr-value">ACTIVE</div>
-      <div class="instr-bar"><div class="instr-bar-fill" style="width:75%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Frame</div>
-      <div class="instr-value" id="fps-val">60 fps</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="fps-bar" style="width:100%"></div></div>
-    </div>
-  </div>
-
-  <!-- Centre -->
-  <div id="centre">
-    <div id="rings-wrap">
-      <!-- SVG instrument rings -->
-      <svg id="rings-svg" viewBox="0 0 340 340" xmlns="http://www.w3.org/2000/svg">
-        <!-- Outer thin ring with tick marks -->
-        <circle cx="170" cy="170" r="162" fill="none" stroke="rgba(180,210,255,0.06)" stroke-width="1"/>
-        <circle cx="170" cy="170" r="158" fill="none" stroke="rgba(180,210,255,0.04)" stroke-width="0.5"/>
-        <!-- Tick marks: major every 30°, minor every 10° -->
-        <g id="ticks-outer" stroke="rgba(180,210,255,0.25)" stroke-linecap="round"></g>
-        <!-- Mid ring -->
-        <circle cx="170" cy="170" r="140" fill="none" stroke="rgba(180,210,255,0.08)" stroke-width="0.8"/>
-        <!-- Inner arcs - HUD sweep indicators -->
-        <circle cx="170" cy="170" r="128" fill="none" stroke="rgba(180,210,255,0.04)" stroke-width="1"/>
-        <!-- Sweeping accent arc (animated via JS) -->
-        <circle id="sweep-arc" cx="170" cy="170" r="128"
-          fill="none" stroke="rgba(180,210,255,0.35)" stroke-width="1.5"
-          stroke-dasharray="40 766" stroke-dashoffset="0"
-          stroke-linecap="round"/>
-        <!-- Second sweep (opposite) -->
-        <circle id="sweep-arc2" cx="170" cy="170" r="128"
-          fill="none" stroke="rgba(180,210,255,0.15)" stroke-width="0.8"
-          stroke-dasharray="20 786" stroke-dashoffset="383"
-          stroke-linecap="round"/>
-        <!-- Crosshair lines -->
-        <line x1="8" y1="170" x2="46" y2="170" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
-        <line x1="294" y1="170" x2="332" y2="170" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
-        <line x1="170" y1="8" x2="170" y2="46" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
-        <line x1="170" y1="294" x2="170" y2="332" stroke="rgba(180,210,255,0.12)" stroke-width="0.8"/>
-        <!-- Diagonal micro cross -->
-        <line x1="136" y1="136" x2="142" y2="142" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
-        <line x1="204" y1="136" x2="198" y2="142" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
-        <line x1="136" y1="204" x2="142" y2="198" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
-        <line x1="204" y1="204" x2="198" y2="198" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
-        <!-- Inner ring glow ring (animated opacity) -->
-        <circle id="glow-ring" cx="170" cy="170" r="100"
-          fill="none" stroke="rgba(180,210,255,0.0)" stroke-width="30"/>
-        <!-- Core border ring -->
-        <circle cx="170" cy="170" r="85" fill="none" stroke="rgba(180,210,255,0.18)" stroke-width="0.8"/>
-        <circle cx="170" cy="170" r="82" fill="none" stroke="rgba(180,210,255,0.07)" stroke-width="0.5"/>
-      </svg>
-      <!-- Core canvas (2D: orb + waveform shimmer) -->
-      <canvas id="core-canvas"></canvas>
-    </div>
-
-    <div id="state-wrap">
-      <div id="state-label">IDLE</div>
-      <div id="state-sub">NEURAL STANDBY</div>
-    </div>
-  </div>
-
-  <!-- Right panel -->
-  <div class="side-panel right">
-    <div>
-      <div class="instr-label">Force OS</div>
-      <div class="instr-value" id="os-health">—</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="os-bar" style="width:0%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Needs You</div>
-      <div class="instr-value" id="os-inbox">—</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="os-inbox-bar" style="width:0%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Mode</div>
-      <div class="instr-value" id="mode-val">PASSIVE</div>
-      <div class="instr-bar"><div class="instr-bar-fill" style="width:35%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Audio</div>
-      <div class="instr-value" id="audio-val">MONITOR</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="audio-bar" style="width:50%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Voice Engine</div>
-      <div class="instr-value">ELEVEN</div>
-      <div class="instr-bar"><div class="instr-bar-fill" style="width:90%"></div></div>
-    </div>
-    <div>
-      <div class="instr-label">Uptime</div>
-      <div class="instr-value" id="uptime-val">00:00</div>
-      <div class="instr-bar"><div class="instr-bar-fill" id="uptime-bar" style="width:5%"></div></div>
-    </div>
-  </div>
-
-  <!-- Bottom activity rail -->
-  <div id="rail-wrap">
-    <div id="rail-tag">TELEMETRY</div>
-    <div id="rail-track">
-      <div id="rail-text">SYSTEM NOMINAL — AWAITING INPUT</div>
-    </div>
-    <!-- Mini waveform -->
-    <canvas id="waveform-canvas" width="120" height="26"></canvas>
-  </div>
-
-</div><!-- #hud -->
 
 <script type="module">
 import * as THREE from 'three';
 
-// ─── State ───────────────────────────────────────────────────────────────────
-const state = {
-  status: 'idle',      // idle | listening | thinking | speaking | connected
-  activity: '',
-  linked: false,
-  sessionCount: 0,
-  uptimeStart: Date.now(),
-  frameCount: 0,
-  lastFpsTime: performance.now(),
-  fps: 60,
-};
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const state = { status: 'idle', linked: false, sessions: 0, uptimeStart: Date.now() };
+const $ = (id) => document.getElementById(id);
 
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* ── nav / view switching ── */
+const TITLES = { core: '<b>ZERO</b> / NEURAL CORE', conn: '<b>ZERO</b> / CONNECTIONS', vault: '<b>ZERO</b> / VAULT' };
+const VIEW_ID = { core: 'view-core', conn: 'view-conn', vault: 'vault' };
+document.querySelectorAll('.nav-btn').forEach(btn => btn.onclick = () => {
+  const v = btn.dataset.view;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  $(VIEW_ID[v]).classList.add('active');
+  $('view-title').innerHTML = TITLES[v];
+  if (v === 'conn') buildConnections();
+  if (v === 'vault') loadVault();
+});
 
-// ─── Clock ────────────────────────────────────────────────────────────────────
-const clockEl = document.getElementById('clock');
-function updateClock() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2,'0');
-  const m = String(now.getMinutes()).padStart(2,'0');
-  const s = String(now.getSeconds()).padStart(2,'0');
-  clockEl.textContent = `${h}:${m}:${s}`;
+/* ── clock + uptime ── */
+function clock() {
+  const n = new Date(), p = x => String(x).padStart(2, '0');
+  $('clock').textContent = `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+  const sec = Math.floor((Date.now() - state.uptimeStart) / 1000);
+  $('ci-uptime').textContent = `${p(Math.floor(sec/60))}:${p(sec%60)}`;
+  $('ci-uptime-bar').style.width = Math.min(100, sec/36) + '%';
 }
-setInterval(updateClock, 1000);
-updateClock();
+setInterval(clock, 1000); clock();
 
-// ─── Force OS link ──────────────────────────────────────────────────────────────
-// Poll the Force AI OS dashboard (the "common mind" on :7717) for live health +
-// the count of items that need Ahmad. Degrades gracefully when the OS is offline.
-const osHealthEl = document.getElementById('os-health');
-const osBarEl = document.getElementById('os-bar');
-const osInboxEl = document.getElementById('os-inbox');
-const osInboxBarEl = document.getElementById('os-inbox-bar');
+/* ── Force OS poll (7717) ── */
+let osState = null;
 async function pollOS() {
   try {
     const d = await (await fetch('http://127.0.0.1:7717/api/state', { cache: 'no-store' })).json();
+    osState = d;
     const subs = d.subsystems || [];
-    const green = subs.filter(s => s.ok === 'true').length;
-    const bad = subs.filter(s => s.ok === 'false').length;
-    const pct = subs.length ? Math.round((green / subs.length) * 100) : 0;
-    if (osHealthEl) osHealthEl.textContent = bad ? `${bad} DOWN` : (green === subs.length ? 'ALL GREEN' : `${green}/${subs.length}`);
-    if (osBarEl) osBarEl.style.width = pct + '%';
+    const green = subs.filter(s => s.ok === 'true').length, bad = subs.filter(s => s.ok === 'false').length;
+    const txt = bad ? `${bad} DOWN` : (green === subs.length ? 'ALL GREEN' : `${green}/${subs.length}`);
+    $('ci-os').textContent = txt;
+    $('ci-os-bar').style.width = (subs.length ? Math.round(green/subs.length*100) : 0) + '%';
     const inbox = (d.inbox && d.inbox.count) || 0;
-    if (osInboxEl) { osInboxEl.textContent = inbox ? String(inbox) : 'CLEAR'; osInboxEl.style.color = inbox ? 'var(--accent)' : ''; }
-    if (osInboxBarEl) osInboxBarEl.style.width = Math.min(inbox * 25, 100) + '%';
-  } catch (e) {
-    if (osHealthEl) osHealthEl.textContent = 'OFFLINE';
-    if (osBarEl) osBarEl.style.width = '0%';
-    if (osInboxEl) osInboxEl.textContent = '—';
+    $('ci-inbox').textContent = inbox ? String(inbox) : 'CLEAR';
+    $('ci-inbox-bar').style.width = Math.min(inbox*25, 100) + '%';
+    const cg = $('conn-os'); if (cg) cg.textContent = 'OS ' + txt;
+  } catch {
+    osState = null;
+    $('ci-os').textContent = 'OFFLINE'; $('ci-os-bar').style.width = '0%';
+    const cg = $('conn-os'); if (cg) cg.textContent = 'OS OFFLINE';
   }
 }
-pollOS();
-setInterval(pollOS, 5000);
+pollOS(); setInterval(pollOS, 5000);
 
-// ─── Uptime ───────────────────────────────────────────────────────────────────
-const uptimeEl = document.getElementById('uptime-val');
-const uptimeBarEl = document.getElementById('uptime-bar');
-setInterval(() => {
-  const sec = Math.floor((Date.now() - state.uptimeStart) / 1000);
-  const m = String(Math.floor(sec / 60)).padStart(2,'0');
-  const s = String(sec % 60).padStart(2,'0');
-  uptimeEl.textContent = `${m}:${s}`;
-  uptimeBarEl.style.width = Math.min(100, (sec / 3600) * 100) + '%';
-}, 1000);
-
-// ─── WebSocket ────────────────────────────────────────────────────────────────
-const linkDot = document.getElementById('link-dot');
-const linkLabel = document.getElementById('link-label');
-const stateLabel = document.getElementById('state-label');
-const stateSub = document.getElementById('state-sub');
-const railText = document.getElementById('rail-text');
-const sessionEl = document.getElementById('session-counter');
-const modeEl = document.getElementById('mode-val');
-const audioEl = document.getElementById('audio-val');
-
+/* ── voice WS (8765) ── */
 const STATE_META = {
-  idle:       { label: 'IDLE',      sub: 'NEURAL STANDBY',   mode: 'PASSIVE',  audio: 'MONITOR'  },
-  listening:  { label: 'LISTENING', sub: 'VOICE CAPTURE',    mode: 'ACTIVE',   audio: 'CAPTURE'  },
-  thinking:   { label: 'THINKING',  sub: 'PROCESSING',       mode: 'COMPUTE',  audio: 'HOLD'     },
-  speaking:   { label: 'SPEAKING',  sub: 'OUTPUT STREAM',    mode: 'RESPONSE', audio: 'PLAYBACK' },
-  connected:  { label: 'CONNECTED', sub: 'LINK ESTABLISHED', mode: 'PASSIVE',  audio: 'MONITOR'  },
+  idle: ['IDLE','NEURAL STANDBY'], listening: ['LISTENING','VOICE CAPTURE'],
+  thinking: ['THINKING','PROCESSING'], speaking: ['SPEAKING','OUTPUT STREAM'], connected: ['CONNECTED','LINK ESTABLISHED'],
 };
-
-function applyStatus(status, activity) {
-  state.status = status;
-  const meta = STATE_META[status] || STATE_META.idle;
-  stateLabel.textContent = meta.label;
-  stateLabel.className = status;
-  stateSub.textContent = meta.sub;
-  modeEl.textContent = meta.mode;
-  audioEl.textContent = meta.audio;
-  if (activity) {
-    setRailText(activity);
-  }
-  if (status === 'listening') {
-    state.sessionCount = Math.min(999, state.sessionCount + 1);
-    sessionEl.textContent = String(state.sessionCount).padStart(3,'0');
-    const pct = Math.min(100, (state.sessionCount / 50) * 100);
-    document.getElementById('sess-bar').style.width = pct + '%';
-  }
+function applyStatus(s) {
+  state.status = s;
+  const [lab, sub] = STATE_META[s] || STATE_META.idle;
+  $('state-label').textContent = lab; $('state-label').className = s;
+  $('state-sub').textContent = sub; $('ci-state').textContent = lab;
+  $('ci-state-bar').style.width = ({idle:20,listening:90,thinking:70,speaking:80,connected:30}[s]||20) + '%';
+  if (s === 'listening') { state.sessions = Math.min(999, state.sessions+1); $('ci-sess').textContent = String(state.sessions).padStart(3,'0'); $('ci-sess-bar').style.width = Math.min(100, state.sessions*2) + '%'; }
 }
-
-function setRailText(text) {
-  railText.style.opacity = '0';
-  setTimeout(() => {
-    railText.textContent = text.toUpperCase();
-    railText.style.opacity = '1';
-  }, 180);
-}
-
-let wsReconnectTimer = null;
-let wsPingStart = 0;
-
 function connectWS() {
-  const ws = new WebSocket('ws://localhost:8765');
-
-  ws.onopen = () => {
-    state.linked = true;
-    linkDot.className = 'live';
-    linkLabel.textContent = 'LINK LIVE';
-    wsPingStart = performance.now();
-  };
-
-  ws.onmessage = (ev) => {
-    let msg;
-    try { msg = JSON.parse(ev.data); } catch { return; }
-    const lat = Math.round(performance.now() - wsPingStart);
-    wsPingStart = performance.now();
-    document.getElementById('latency-val').textContent = `${lat} ms`;
-    const pct = Math.max(5, Math.min(100, 100 - (lat / 5)));
-    document.getElementById('lat-bar').style.width = pct + '%';
-    applyStatus(msg.status || 'idle', msg.activity || '');
-  };
-
-  ws.onclose = ws.onerror = () => {
-    state.linked = false;
-    linkDot.className = '';
-    linkLabel.textContent = 'LINK OFFLINE';
-    applyStatus('idle', '');
-    setRailText('WS OFFLINE — RECONNECTING…');
-    clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = setTimeout(connectWS, 3000);
-  };
+  let ws; try { ws = new WebSocket('ws://localhost:8765'); } catch { return setTimeout(connectWS, 3000); }
+  ws.onopen = () => { state.linked = true; $('link-dot').classList.add('live'); $('ci-link').textContent = 'LIVE'; $('ci-link-bar').style.width = '100%'; };
+  ws.onmessage = e => { try { applyStatus(JSON.parse(e.data).status || 'idle'); } catch {} };
+  ws.onclose = ws.onerror = () => { state.linked = false; $('link-dot').classList.remove('live'); $('ci-link').textContent = 'OFFLINE'; $('ci-link-bar').style.width = '0%'; applyStatus('idle'); setTimeout(connectWS, 3000); };
 }
 connectWS();
 
-// ─── THREE.js Starfield ───────────────────────────────────────────────────────
-const bgCanvas = document.getElementById('bg-canvas');
-const renderer = new THREE.WebGLRenderer({ canvas: bgCanvas, antialias: false, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.setSize(window.innerWidth, window.innerHeight);
+/* ── CONNECTIONS view ── */
+let connBuilt = false;
+async function buildConnections() {
+  const svg = $('conn-svg');
+  if (!connBuilt) {
+    let g; try { g = await (await fetch('/api/connections')).json(); } catch { return; }
+    const NS = 'http://www.w3.org/2000/svg';
+    const SX = 10, SY = 6.4;  // map node x/y (0-100) into the 1000x640 viewBox
+    const pos = Object.fromEntries(g.nodes.map(n => [n.id, { ...n, x: n.x*SX, y: n.y*SY }]));
+    // edges first
+    g.edges.forEach(([a,b,lbl]) => {
+      const A = pos[a], B = pos[b]; if (!A||!B) return;
+      for (const cls of ['edge','edge-flow']) {
+        const line = document.createElementNS(NS,'line');
+        line.setAttribute('x1',A.x); line.setAttribute('y1',A.y); line.setAttribute('x2',B.x); line.setAttribute('y2',B.y);
+        line.setAttribute('class',cls); if (cls==='edge-flow') line.dataset.flow='1'; svg.appendChild(line);
+      }
+      if (lbl) { const t = document.createElementNS(NS,'text');
+        t.setAttribute('x',(A.x+B.x)/2); t.setAttribute('y',(A.y+B.y)/2 - 6); t.setAttribute('class','edge-label'); t.setAttribute('text-anchor','middle'); t.textContent = lbl; svg.appendChild(t); }
+    });
+    // nodes (drawn over edges)
+    g.nodes.forEach(n => {
+      const P = pos[n.id], w = n.label.length*8 + 28, h = 34;
+      const rect = document.createElementNS(NS,'rect');
+      rect.setAttribute('x', P.x - w/2); rect.setAttribute('y', P.y - h/2); rect.setAttribute('width', w); rect.setAttribute('height', h);
+      rect.setAttribute('rx', 5); rect.setAttribute('class', 'node-box ' + n.group); rect.id = 'cn-' + n.id; svg.appendChild(rect);
+      const t = document.createElementNS(NS,'text');
+      t.setAttribute('x', P.x); t.setAttribute('y', P.y + 5); t.setAttribute('class','node-label'); t.setAttribute('text-anchor','middle'); t.textContent = n.label; svg.appendChild(t);
+    });
+    connBuilt = true;
+    // animate flow dashes
+    let off = 0;
+    (function flow(){ off -= reduced?0:0.25; svg.querySelectorAll('[data-flow]').forEach(f=>f.setAttribute('stroke-dashoffset',off)); requestAnimationFrame(flow); })();
+  }
+  // live: vault count + OS health onto legend already updated by pollOS/loadVault
+  if (vaultFiles.length) $('conn-vault').textContent = 'VAULT ' + vaultFiles.length + ' notes';
+}
 
+/* ── VAULT view ── */
+let vaultFiles = [], vaultLoaded = false, activeItem = null;
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function mdToHtml(md) {
+  const lines = esc(md).split('\n'); let html = '', inList = false, inCode = false;
+  const inline = s => s
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/\[\[([^\]]+)\]\]/g,'<span class="wikilink">$1</span>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a>$1</a>');
+  for (let ln of lines) {
+    if (ln.trim().startsWith('```')) { inCode=!inCode; html += inCode?'<pre class="md"><code>':'</code></pre>'; continue; }
+    if (inCode) { html += esc(ln)+'\n'; continue; }
+    if (/^---+$/.test(ln.trim())) { html += '<hr>'; continue; }
+    let m;
+    if ((m = ln.match(/^(#{1,3})\s+(.*)/))) { if(inList){html+='</ul>';inList=false;} html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; continue; }
+    if ((m = ln.match(/^\s*[-*]\s+(.*)/))) { if(!inList){html+='<ul>';inList=true;} html += `<li>${inline(m[1])}</li>`; continue; }
+    if (inList) { html += '</ul>'; inList=false; }
+    if (ln.trim()) html += `<p>${inline(ln)}</p>`;
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+async function loadVault() {
+  if (vaultLoaded) return;
+  try { vaultFiles = (await (await fetch('/api/vault')).json()).files || []; } catch { vaultFiles = []; }
+  vaultLoaded = true;
+  $('vault-count').textContent = `${vaultFiles.length} notes · sorted by recency`;
+  $('ci-vault').textContent = String(vaultFiles.length);
+  $('ci-vault-bar').style.width = Math.min(100, vaultFiles.length/8) + '%';
+  renderVaultList('');
+}
+function renderVaultList(q) {
+  q = q.toLowerCase();
+  const items = vaultFiles.filter(f => !q || f.name.toLowerCase().includes(q) || (f.hint||'').toLowerCase().includes(q) || f.path.toLowerCase().includes(q));
+  const wrap = $('vault-items'); wrap.innerHTML = '';
+  let curScope = '';
+  // group: keep recency order but label scope transitions
+  const byScope = { memory: [], vault: [] };
+  items.forEach(f => byScope[f.scope] && byScope[f.scope].push(f));
+  [['memory','SCOPED MEMORY'],['vault','OBSIDIAN VAULT']].forEach(([sc,label]) => {
+    if (!byScope[sc].length) return;
+    const h = document.createElement('div'); h.className='vault-scope'; h.textContent = `${label} · ${byScope[sc].length}`; wrap.appendChild(h);
+    byScope[sc].forEach(f => {
+      const el = document.createElement('div'); el.className='vault-item';
+      el.innerHTML = `<div class="vi-name">${esc(f.name)}</div>${f.hint?`<div class="vi-hint">${esc(f.hint)}</div>`:''}`;
+      el.onclick = () => openDoc(f, el);
+      wrap.appendChild(el);
+    });
+  });
+  if (!items.length) wrap.innerHTML = '<div style="padding:20px;color:var(--fg-faint);font-size:12px">no match</div>';
+}
+async function openDoc(f, el) {
+  if (activeItem) activeItem.classList.remove('active');
+  el.classList.add('active'); activeItem = el;
+  const doc = $('vault-doc');
+  doc.innerHTML = '<div class="doc-meta">loading…</div>';
+  try {
+    const md = await (await fetch(`/api/vault/file?scope=${encodeURIComponent(f.scope)}&p=${encodeURIComponent(f.path)}`)).text();
+    doc.innerHTML = `<div class="doc-meta">${f.scope} · ${esc(f.path)} · ${(f.size/1024).toFixed(1)} KB</div><div class="md">${mdToHtml(md)}</div>`;
+    doc.scrollTop = 0;
+  } catch { doc.innerHTML = '<div class="doc-meta">failed to load</div>'; }
+}
+$('vault-search').addEventListener('input', e => renderVaultList(e.target.value));
+
+/* ════════ Three.js starfield (monochrome) ════════ */
+const renderer = new THREE.WebGLRenderer({ canvas: $('bg-canvas'), antialias: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
-camera.position.z = 600;
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000); camera.position.z = 600;
+const N = 1600, geo = new THREE.BufferGeometry();
+const pos = new Float32Array(N*3), sz = new Float32Array(N), al = new Float32Array(N);
+for (let i=0;i<N;i++){ pos[i*3]=(Math.random()-0.5)*2400; pos[i*3+1]=(Math.random()-0.5)*1800; pos[i*3+2]=(Math.random()-0.5)*1200; sz[i]=Math.random()*1.7+0.3; al[i]=Math.random()*0.6+0.12; }
+geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+geo.setAttribute('size', new THREE.BufferAttribute(sz,1));
+geo.setAttribute('alpha', new THREE.BufferAttribute(al,1));
+const mat = new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
+  vertexShader:`attribute float size; attribute float alpha; varying float vA; void main(){ vA=alpha; vec4 mv=modelViewMatrix*vec4(position,1.); gl_PointSize=size*(400./-mv.z); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader:`varying float vA; void main(){ float d=length(gl_PointCoord-vec2(.5)); if(d>.5)discard; gl_FragColor=vec4(1.,1.,1.,smoothstep(.5,0.,d)*vA); }` });
+const stars = new THREE.Points(geo, mat); scene.add(stars);
+addEventListener('resize', () => { renderer.setSize(innerWidth,innerHeight); camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  if (W) { wave.width = W.clientWidth; } });
 
-// Stars
-const STAR_COUNT = 1800;
-const starGeo = new THREE.BufferGeometry();
-const positions = new Float32Array(STAR_COUNT * 3);
-const sizes = new Float32Array(STAR_COUNT);
-const alphas = new Float32Array(STAR_COUNT);
-for (let i = 0; i < STAR_COUNT; i++) {
-  positions[i*3]   = (Math.random() - 0.5) * 2400;
-  positions[i*3+1] = (Math.random() - 0.5) * 1800;
-  positions[i*3+2] = (Math.random() - 0.5) * 1200;
-  sizes[i]  = Math.random() * 1.8 + 0.3;
-  alphas[i] = Math.random() * 0.7 + 0.15;
+/* ticks */
+(function(){ const g=$('ticks-outer'), NS='http://www.w3.org/2000/svg';
+  for(let d=0;d<360;d+=10){ const r=(d-90)*Math.PI/180, maj=d%30===0, len=maj?10:5, x1=170+158*Math.cos(r), y1=170+158*Math.sin(r), x2=170+(158-len)*Math.cos(r), y2=170+(158-len)*Math.sin(r);
+    const l=document.createElementNS(NS,'line'); l.setAttribute('x1',x1.toFixed(1)); l.setAttribute('y1',y1.toFixed(1)); l.setAttribute('x2',x2.toFixed(1)); l.setAttribute('y2',y2.toFixed(1)); l.setAttribute('stroke-width',maj?'1.2':'0.6'); l.setAttribute('opacity',maj?'0.5':'0.22'); g.appendChild(l); } })();
+
+/* core orb (white/grey) */
+const cc = $('core-canvas'), cx = cc.getContext('2d'); const SZ=340, C=SZ/2; cc.width=cc.height=SZ;
+let breath=0, spin=0, sweep=0, sweep2=383, ripples=[{r:0,a:0},{r:0,a:0},{r:0,a:0}], curGlow=0;
+let lastT=performance.now();
+function tick(now){ requestAnimationFrame(tick); const dt=Math.min((now-lastT)/1000,0.05); lastT=now; const s=state.status;
+  breath += dt*(reduced?0:(s==='idle'?0.45:s==='listening'?0.9:1.6));
+  spin += dt*(reduced?0:(s==='thinking'?1.8:s==='listening'?0.6:0.25));
+  sweep -= reduced?0:(s==='thinking'?6:s==='listening'?3:1); sweep2 -= reduced?0:(s==='thinking'?4:s==='listening'?2:0.7);
+  let tg = s==='idle'?0.03:s==='listening'?0.16:s==='thinking'?0.11:s==='speaking'?0.12:0.03; if(!reduced&&s!=='idle') tg+=Math.sin(breath*1.5)*0.04;
+  curGlow += (tg-curGlow)*dt*4; $('glow-ring').style.stroke=`rgba(255,255,255,${curGlow.toFixed(3)})`;
+  $('sweep-arc').style.strokeDashoffset=sweep; $('sweep-arc2').style.strokeDashoffset=sweep2;
+  const so = s==='idle'?0.18:s==='listening'?0.55:s==='thinking'?0.7:s==='speaking'?0.5:0.18; $('sweep-arc').style.opacity=so; $('sweep-arc2').style.opacity=so*0.45;
+  if(!reduced){ stars.rotation.y+=dt*0.008; stars.rotation.x+=dt*0.003; } renderer.render(scene,camera);
+  drawCore(dt,s);
 }
-starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-starGeo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
-
-const starMat = new THREE.ShaderMaterial({
-  transparent: true,
-  depthWrite: false,
-  vertexShader: `
-    attribute float size;
-    attribute float alpha;
-    varying float vAlpha;
-    void main(){
-      vAlpha = alpha;
-      vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-      gl_PointSize = size * (400.0 / -mvPos.z);
-      gl_Position = projectionMatrix * mvPos;
-    }
-  `,
-  fragmentShader: `
-    varying float vAlpha;
-    void main(){
-      float d = length(gl_PointCoord - vec2(0.5));
-      if(d > 0.5) discard;
-      float a = smoothstep(0.5, 0.0, d) * vAlpha;
-      gl_FragColor = vec4(0.85, 0.9, 1.0, a);
-    }
-  `,
-});
-const stars = new THREE.Points(starGeo, starMat);
-scene.add(stars);
-
-// Faint nebula plane (two overlapping large transparent textures made procedurally)
-function makeNebulaTexture(size) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  const cx = size/2, cy = size/2;
-  // radial vignette
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, size*0.5);
-  g.addColorStop(0,   'rgba(30,40,70,0.18)');
-  g.addColorStop(0.4, 'rgba(10,15,35,0.10)');
-  g.addColorStop(1,   'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-  // soft streaks
-  for (let i = 0; i < 6; i++) {
-    const x = cx + (Math.random()-0.5)*size*0.6;
-    const y = cy + (Math.random()-0.5)*size*0.6;
-    const gr = ctx.createRadialGradient(x, y, 0, x, y, size*0.3);
-    gr.addColorStop(0,   'rgba(80,100,180,0.04)');
-    gr.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.fillStyle = gr;
-    ctx.fillRect(0, 0, size, size);
-  }
-  return new THREE.CanvasTexture(c);
+function drawCore(dt,s){ cx.clearRect(0,0,SZ,SZ); const b=Math.sin(breath);
+  let rad=70; if(!reduced){ rad = s==='listening'?78+b*6 : s==='thinking'?75+Math.abs(b)*8 : s==='speaking'?74+b*4 : 70+b*2.5; }
+  const ha = s==='idle'?0.04:s==='listening'?0.13:0.09; const halo=cx.createRadialGradient(C,C,rad*0.7,C,C,rad*2.2);
+  halo.addColorStop(0,`rgba(255,255,255,${ha})`); halo.addColorStop(0.5,`rgba(255,255,255,${(ha*0.3).toFixed(4)})`); halo.addColorStop(1,'rgba(0,0,0,0)');
+  cx.beginPath(); cx.arc(C,C,rad*2.2,0,7); cx.fillStyle=halo; cx.fill();
+  if(s==='listening'&&!reduced){ for(let i=0;i<3;i++){ const rr=ripples[i]; rr.r+=dt*55; if(rr.r>rad*2.5||rr.a<=0){rr.r=rad*1.05;rr.a=0.35;} rr.a-=dt*0.18; if(rr.a>0){ cx.beginPath(); cx.arc(C,C,rr.r,0,7); cx.strokeStyle=`rgba(255,255,255,${Math.max(0,rr.a).toFixed(3)})`; cx.lineWidth=0.8; cx.stroke(); } } }
+  if(s==='thinking'&&!reduced){ for(let i=0;i<4;i++){ const a0=spin+i*Math.PI*0.5; cx.beginPath(); cx.arc(C,C,rad+8+i*4,a0,a0+0.8); cx.strokeStyle=`rgba(255,255,255,${(0.4-i*0.07).toFixed(2)})`; cx.lineWidth=1-i*0.15; cx.stroke(); } }
+  if(s==='speaking'&&!reduced){ cx.beginPath(); for(let i=0;i<=120;i++){ const ang=(i/120)*Math.PI*2-Math.PI*0.5; const n=Math.sin(ang*8+breath*3)*4+Math.sin(ang*13-breath*2)*2; const rr=rad+n; const x=C+rr*Math.cos(ang),y=C+rr*Math.sin(ang); i?cx.lineTo(x,y):cx.moveTo(x,y); } cx.strokeStyle='rgba(255,255,255,0.4)'; cx.lineWidth=1; cx.stroke(); }
+  const br = s==='idle'?0.5:s==='listening'?0.95:s==='thinking'?0.8:0.72; const g=cx.createRadialGradient(C-rad*0.2,C-rad*0.2,0,C,C,rad);
+  g.addColorStop(0,`rgba(255,255,255,${(br*0.95).toFixed(2)})`); g.addColorStop(0.45,`rgba(200,200,205,${(br*0.5).toFixed(2)})`); g.addColorStop(0.8,`rgba(90,90,95,${(br*0.25).toFixed(2)})`); g.addColorStop(1,'rgba(0,0,0,0.15)');
+  cx.beginPath(); cx.arc(C,C,rad,0,7); cx.fillStyle=g; cx.fill();
+  cx.beginPath(); cx.arc(C-rad*0.28,C-rad*0.28,rad*0.22,0,7); cx.fillStyle=`rgba(255,255,255,${(0.16*br).toFixed(3)})`; cx.fill();
+  cx.beginPath(); cx.arc(C,C,rad,0,7); cx.strokeStyle=`rgba(255,255,255,${(0.3*br).toFixed(2)})`; cx.lineWidth=0.8; cx.stroke();
 }
-const nebulaTex = makeNebulaTexture(512);
-const nebulaMat = new THREE.MeshBasicMaterial({ map: nebulaTex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-const nebulaPlane = new THREE.Mesh(new THREE.PlaneGeometry(2400, 1800), nebulaMat);
-nebulaPlane.position.z = -400;
-scene.add(nebulaPlane);
-
-// Resize
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-});
-
-// ─── SVG tick marks (built once) ──────────────────────────────────────────────
-(function buildTicks() {
-  const g = document.getElementById('ticks-outer');
-  const cx = 170, cy = 170, r = 158;
-  const svgNS = 'http://www.w3.org/2000/svg';
-  for (let deg = 0; deg < 360; deg += 10) {
-    const rad = (deg - 90) * Math.PI / 180;
-    const isMajor = deg % 30 === 0;
-    const len = isMajor ? 10 : 5;
-    const x1 = cx + r * Math.cos(rad);
-    const y1 = cy + r * Math.sin(rad);
-    const x2 = cx + (r - len) * Math.cos(rad);
-    const y2 = cy + (r - len) * Math.sin(rad);
-    const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('x1', x1.toFixed(2));
-    line.setAttribute('y1', y1.toFixed(2));
-    line.setAttribute('x2', x2.toFixed(2));
-    line.setAttribute('y2', y2.toFixed(2));
-    line.setAttribute('stroke-width', isMajor ? '1.2' : '0.6');
-    line.setAttribute('opacity', isMajor ? '0.5' : '0.25');
-    g.appendChild(line);
-  }
-})();
-
-// ─── Core canvas (orb) ───────────────────────────────────────────────────────
-const coreCanvas = document.getElementById('core-canvas');
-const coreCtx = coreCanvas.getContext('2d');
-const CORE_SIZE = 340;
-coreCanvas.width = coreCanvas.height = CORE_SIZE;
-const CC = CORE_SIZE / 2; // centre
-
-// ─── Waveform canvas ─────────────────────────────────────────────────────────
-const waveCanvas = document.getElementById('waveform-canvas');
-const waveCtx = waveCanvas.getContext('2d');
-
-// ─── Animation state ─────────────────────────────────────────────────────────
-let breathPhase  = 0;
-let ripplePhase  = 0;
-let spinAngle    = 0;
-let sweepOffset  = 0;
-let sweepOffset2 = 383;
-let glowAlpha    = 0;
-const glowRingEl = document.getElementById('glow-ring');
-const sweepArcEl = document.getElementById('sweep-arc');
-const sweepArc2El = document.getElementById('sweep-arc2');
-
-// Smooth target values for glow
-let targetGlow  = 0.0;
-let currentGlow = 0.0;
-
-// Ring radii for ripple
-const rippleRings = [{ r: 0, a: 0 }, { r: 0, a: 0 }, { r: 0, a: 0 }];
-
-// ─── Main RAF loop ────────────────────────────────────────────────────────────
-let lastT = performance.now();
-
-function tick(now) {
-  requestAnimationFrame(tick);
-  const dt = Math.min((now - lastT) / 1000, 0.05);
-  lastT = now;
-
-  // FPS
-  state.frameCount++;
-  if (now - state.lastFpsTime > 1000) {
-    state.fps = Math.round(state.frameCount * 1000 / (now - state.lastFpsTime));
-    state.frameCount = 0;
-    state.lastFpsTime = now;
-    document.getElementById('fps-val').textContent = state.fps + ' fps';
-    document.getElementById('fps-bar').style.width = Math.min(100, (state.fps / 60) * 100) + '%';
-  }
-
-  const s = state.status;
-  const reduced = reducedMotion;
-
-  // ── Phase advances ──
-  breathPhase  += dt * (reduced ? 0 : (s === 'idle' ? 0.45 : s === 'listening' ? 0.9 : 1.6));
-  ripplePhase  += dt * (reduced ? 0 : 0.8);
-  spinAngle    += dt * (reduced ? 0 : (s === 'thinking' ? 1.8 : s === 'listening' ? 0.6 : 0.25));
-  sweepOffset  -= reduced ? 0 : (s === 'thinking' ? 6 : s === 'listening' ? 3 : 1);
-  sweepOffset2 -= reduced ? 0 : (s === 'thinking' ? 4 : s === 'listening' ? 2 : 0.7);
-
-  // ── Glow target ──
-  targetGlow = s === 'idle' ? 0.03 : s === 'listening' ? 0.14 : s === 'thinking' ? 0.10 : s === 'speaking' ? 0.11 : 0.03;
-  if (!reduced && s !== 'idle') {
-    targetGlow += Math.sin(breathPhase * 1.5) * 0.04;
-  }
-  currentGlow += (targetGlow - currentGlow) * dt * 4;
-  glowRingEl.style.stroke = `rgba(180,210,255,${currentGlow.toFixed(3)})`;
-
-  // ── Sweep arcs ──
-  sweepArcEl.style.strokeDashoffset  = sweepOffset;
-  sweepArc2El.style.strokeDashoffset = sweepOffset2;
-
-  // Sweep arc intensity by state
-  const sweepOpacity = s === 'idle' ? 0.18 : s === 'listening' ? 0.5 : s === 'thinking' ? 0.65 : s === 'speaking' ? 0.45 : 0.18;
-  sweepArcEl.style.opacity  = sweepOpacity;
-  sweepArc2El.style.opacity = sweepOpacity * 0.45;
-
-  // ── Three.js stars slow drift ──
-  if (!reduced) {
-    stars.rotation.y += dt * 0.008;
-    stars.rotation.x += dt * 0.003;
-  }
-  renderer.render(scene, camera);
-
-  // ── Core canvas ──
-  drawCore(dt);
-
-  // ── Waveform ──
-  drawWaveform(now);
-}
-
-function drawCore(dt) {
-  const s = state.status;
-  coreCtx.clearRect(0, 0, CORE_SIZE, CORE_SIZE);
-
-  const breath = Math.sin(breathPhase);
-  let radius = 72;
-  if (!reducedMotion) {
-    if (s === 'idle')      radius = 72 + breath * 2.5;
-    if (s === 'listening') radius = 78 + breath * 6;
-    if (s === 'thinking')  radius = 75 + Math.abs(breath) * 8;
-    if (s === 'speaking')  radius = 74 + breath * 4;
-  }
-
-  // Outer soft glow halo
-  const haloAlpha = s === 'idle' ? 0.04 : s === 'listening' ? 0.12 : s === 'thinking' ? 0.09 : 0.08;
-  const halo = coreCtx.createRadialGradient(CC, CC, radius * 0.7, CC, CC, radius * 2.2);
-  halo.addColorStop(0,   `rgba(180,210,255,${haloAlpha})`);
-  halo.addColorStop(0.5, `rgba(180,210,255,${(haloAlpha * 0.3).toFixed(4)})`);
-  halo.addColorStop(1,   'rgba(0,0,0,0)');
-  coreCtx.beginPath();
-  coreCtx.arc(CC, CC, radius * 2.2, 0, Math.PI * 2);
-  coreCtx.fillStyle = halo;
-  coreCtx.fill();
-
-  // Ripple rings for listening
-  if (s === 'listening' && !reducedMotion) {
-    for (let i = 0; i < 3; i++) {
-      const rr = rippleRings[i];
-      rr.r += dt * 55;
-      if (rr.r > radius * 2.5 || rr.a <= 0) {
-        rr.r = radius * 1.05;
-        rr.a = 0.35;
-      }
-      rr.a -= dt * 0.18;
-      if (rr.a > 0) {
-        coreCtx.beginPath();
-        coreCtx.arc(CC, CC, rr.r, 0, Math.PI * 2);
-        coreCtx.strokeStyle = `rgba(180,210,255,${Math.max(0, rr.a).toFixed(3)})`;
-        coreCtx.lineWidth = 0.8;
-        coreCtx.stroke();
-      }
-    }
-  }
-
-  // Thinking: rotating arc segments
-  if (s === 'thinking' && !reducedMotion) {
-    for (let i = 0; i < 4; i++) {
-      const a0 = spinAngle + i * Math.PI * 0.5;
-      const a1 = a0 + 0.8;
-      const rr = radius + 8 + i * 4;
-      coreCtx.beginPath();
-      coreCtx.arc(CC, CC, rr, a0, a1);
-      coreCtx.strokeStyle = `rgba(180,210,255,${(0.4 - i * 0.07).toFixed(2)})`;
-      coreCtx.lineWidth = 1 - i * 0.15;
-      coreCtx.stroke();
-    }
-  }
-
-  // Speaking: shimmer waveform ring
-  if (s === 'speaking' && !reducedMotion) {
-    const pts = 120;
-    coreCtx.beginPath();
-    for (let i = 0; i <= pts; i++) {
-      const ang = (i / pts) * Math.PI * 2 - Math.PI * 0.5;
-      const noise = Math.sin(ang * 8 + breathPhase * 3) * 4 + Math.sin(ang * 13 - breathPhase * 2) * 2;
-      const rr = radius + noise;
-      const x = CC + rr * Math.cos(ang);
-      const y = CC + rr * Math.sin(ang);
-      i === 0 ? coreCtx.moveTo(x, y) : coreCtx.lineTo(x, y);
-    }
-    coreCtx.strokeStyle = 'rgba(180,210,255,0.35)';
-    coreCtx.lineWidth = 1;
-    coreCtx.stroke();
-  }
-
-  // Core orb gradient
-  const grad = coreCtx.createRadialGradient(CC - radius*0.2, CC - radius*0.2, 0, CC, CC, radius);
-  const bright = s === 'idle' ? 0.55 : s === 'listening' ? 0.9 : s === 'thinking' ? 0.78 : 0.70;
-  grad.addColorStop(0,   `rgba(240,245,255,${(bright * 0.9).toFixed(2)})`);
-  grad.addColorStop(0.4, `rgba(200,215,255,${(bright * 0.6).toFixed(2)})`);
-  grad.addColorStop(0.75,`rgba(80,100,160,${(bright * 0.3).toFixed(2)})`);
-  grad.addColorStop(1,   `rgba(0,0,0,${(bright * 0.2).toFixed(2)})`);
-  coreCtx.beginPath();
-  coreCtx.arc(CC, CC, radius, 0, Math.PI * 2);
-  coreCtx.fillStyle = grad;
-  coreCtx.fill();
-
-  // Specular highlight
-  coreCtx.beginPath();
-  coreCtx.arc(CC - radius*0.28, CC - radius*0.28, radius * 0.22, 0, Math.PI * 2);
-  coreCtx.fillStyle = `rgba(255,255,255,${(0.12 * bright).toFixed(3)})`;
-  coreCtx.fill();
-
-  // Inner ring line
-  coreCtx.beginPath();
-  coreCtx.arc(CC, CC, radius, 0, Math.PI * 2);
-  coreCtx.strokeStyle = `rgba(180,210,255,${(0.3 * bright).toFixed(2)})`;
-  coreCtx.lineWidth = 0.8;
-  coreCtx.stroke();
-}
-
-function drawWaveform(now) {
-  const s = state.status;
-  const w = waveCanvas.width, h = waveCanvas.height;
-  waveCtx.clearRect(0, 0, w, h);
-
-  const amp = s === 'idle' ? 2 : s === 'listening' ? 8 : s === 'thinking' ? 5 : s === 'speaking' ? 10 : 2;
-  const speed = s === 'thinking' ? 0.006 : s === 'speaking' ? 0.008 : 0.003;
-  const t = now * speed;
-  const cy = h / 2;
-
-  waveCtx.beginPath();
-  for (let x = 0; x < w; x++) {
-    const nx = x / w;
-    const y = cy
-      + Math.sin(nx * 7 + t)   * amp
-      + Math.sin(nx * 13 - t * 1.3) * amp * 0.5
-      + Math.sin(nx * 3  + t * 0.7) * amp * 0.3;
-    x === 0 ? waveCtx.moveTo(x, y) : waveCtx.lineTo(x, y);
-  }
-  const wAlpha = s === 'idle' ? 0.2 : 0.55;
-  waveCtx.strokeStyle = `rgba(180,210,255,${wAlpha})`;
-  waveCtx.lineWidth = 1;
-  waveCtx.stroke();
-}
-
-// ─── Kick off ─────────────────────────────────────────────────────────────────
+const W = null; const wave = {}; // (waveform removed in this layout)
 requestAnimationFrame(tick);
-
-// ─── (Future hook) Real audio levels would feed drawCore's amplitude here ──
-// window.__zeroAudioAmplitude = 0;  // set by audio pipeline when available
+loadVault();  // populate vault count for the core rail + connections legend up front
 </script>
 </body>
 </html>

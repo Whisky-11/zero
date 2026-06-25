@@ -1,7 +1,8 @@
 from __future__ import annotations
 import asyncio, json, threading
-import functools, http.server, socketserver
+import socketserver
 from websockets.asyncio.server import broadcast, serve
+from .hud_api import HudApiHandler
 
 class Hud:
     def __init__(self, ws_port: int = 8765, http_port: int = 911) -> None:
@@ -22,8 +23,9 @@ class Hud:
             await asyncio.Future()
 
     def _serve_http(self, port):
-        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory="ui")
-        httpd = socketserver.ThreadingTCPServer(("127.0.0.1", port), handler)
+        # HudApiHandler serves ui/ statically AND the read-only vault/connections API.
+        socketserver.ThreadingTCPServer.allow_reuse_address = True
+        httpd = socketserver.ThreadingTCPServer(("127.0.0.1", port), HudApiHandler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     def start(self) -> None:

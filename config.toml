@@ -25,7 +25,7 @@ user_name = "Ahmad"
 
 [hud]
 ws_port = 8765
-http_port = 911           # the Porsche reference; HUD page served here
+http_port = 9911          # keeps the 911 (Porsche) reference but >1024 so macOS allows a non-root bind. Ports <1024 (e.g. 911) require root on macOS → HUD silently fails to start.
 
 [gate]
 # tool_input substrings that force a spoken confirmation
