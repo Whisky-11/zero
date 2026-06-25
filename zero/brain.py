@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, threading, os
+import asyncio, threading, os, re
 from pathlib import Path
 from claude_agent_sdk import (ClaudeSDKClient, ClaudeAgentOptions,
                               AssistantMessage, TextBlock, HookMatcher)
@@ -52,13 +52,19 @@ class Brain:
             self._active_model = self._cfg.brain.model
 
     def _pick_model(self, prompt: str) -> str:
-        """Sonnet is the daily driver; escalate THIS turn to Opus only when the
-        request needs deeper reasoning (matched by config escalate_on)."""
+        """Three tiers, cheapest that fits: Opus when the request needs depth
+        (escalate_on), Haiku for ultra-short chit-chat/acks (trivial_on or
+        <= trivial_max_words), else Sonnet (the daily driver)."""
+        b = self._cfg.brain
         p = prompt.lower()
-        triggers = getattr(self._cfg.brain, "escalate_on", []) or []
-        if any(t in p for t in triggers):
-            return self._cfg.brain.opus_model
-        return self._cfg.brain.model
+        if any(t in p for t in (getattr(b, "escalate_on", []) or [])):
+            return b.opus_model
+        pn = re.sub(r"[^\w\s]", "", p).strip()           # drop punctuation
+        trivial = getattr(b, "trivial_on", []) or []
+        maxw = getattr(b, "trivial_max_words", 2)
+        if pn and (pn in trivial or (len(pn.split()) <= maxw)):
+            return getattr(b, "trivial_model", b.model)
+        return b.model
 
     async def _ask(self, prompt: str) -> str:
         """Coroutine that runs on self._loop — ensure client, route model, query, collect text."""

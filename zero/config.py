@@ -20,6 +20,8 @@ class BrainCfg:
     model: str; trivial_model: str; user_name: str
     opus_model: str = "claude-opus-4-8"
     escalate_on: list[str] = field(default_factory=list)
+    trivial_on: list[str] = field(default_factory=list)
+    trivial_max_words: int = 2
 @dataclass
 class HudCfg:   ws_port: int; http_port: int
 @dataclass

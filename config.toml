@@ -26,6 +26,11 @@ opus_model = "claude-opus-4-8"
 trivial_model = "claude-haiku-4-5-20251001"
 # substrings (case-insensitive) in your spoken request that route THIS turn to Opus
 escalate_on = ["use opus", "think hard", "think harder", "deeply", "carefully", "thoroughly", "step by step", "architect", "design the", "debug", "analyze", "review the", "plan the", "figure out why", "complicated", "complex"]
+# trivial tier (Haiku) — ultra-short chit-chat / acks that never need Sonnet.
+# A turn routes to trivial_model when it matches trivial_on OR is <= trivial_max_words
+# (and isn't an escalate_on turn). Tool safety is unaffected (the gate still confirms).
+trivial_on = ["stop", "thanks", "thank you", "thank you zero", "never mind", "nevermind", "cancel", "forget it", "hello", "hi", "hey", "hey zero", "good morning", "good night", "goodnight", "you there", "are you there", "what time is it", "whats the time", "what's the time", "how are you"]
+trivial_max_words = 2
 user_name = "Ahmad"
 
 [hud]
