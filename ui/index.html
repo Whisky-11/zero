@@ -199,7 +199,7 @@
       </div>
 
       <div class="core-rail right">
-        <div><div class="instr-label">Force OS</div><div class="instr-value" id="ci-os">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-os-bar"></div></div></div>
+        <div><div class="instr-label">Force AI OS</div><div class="instr-value" id="ci-os">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-os-bar"></div></div></div>
         <div><div class="instr-label">Needs you</div><div class="instr-value" id="ci-inbox">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-inbox-bar"></div></div></div>
         <div><div class="instr-label">Vault</div><div class="instr-value" id="ci-vault">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-vault-bar"></div></div></div>
         <div><div class="instr-label">Voice engine</div><div class="instr-value">KOKORO</div><div class="instr-bar"><div class="instr-bar-fill" style="width:90%"></div></div></div>
@@ -209,7 +209,7 @@
     <!-- CONNECTIONS -->
     <div id="view-conn" class="view">
       <svg id="conn-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
-      <div id="conn-legend">ONE NERVOUS SYSTEM — <span id="conn-os">OS —</span> · <span id="conn-vault">VAULT —</span> · STATE BUS = <span>~/.whisky-os-state</span></div>
+      <div id="conn-legend">ONE NERVOUS SYSTEM — <span id="conn-os">FORCE AI OS —</span> · <span id="conn-vault">VAULT —</span> · STATE BUS = <span>~/.whisky-os-state</span></div>
     </div>
 
     <!-- VAULT -->
@@ -268,11 +268,11 @@ async function pollOS() {
     const inbox = (d.inbox && d.inbox.count) || 0;
     $('ci-inbox').textContent = inbox ? String(inbox) : 'CLEAR';
     $('ci-inbox-bar').style.width = Math.min(inbox*25, 100) + '%';
-    const cg = $('conn-os'); if (cg) cg.textContent = 'OS ' + txt;
+    const cg = $('conn-os'); if (cg) cg.textContent = 'FORCE AI OS ' + txt;
   } catch {
     osState = null;
     $('ci-os').textContent = 'OFFLINE'; $('ci-os-bar').style.width = '0%';
-    const cg = $('conn-os'); if (cg) cg.textContent = 'OS OFFLINE';
+    const cg = $('conn-os'); if (cg) cg.textContent = 'FORCE AI OS OFFLINE';
   }
 }
 pollOS(); setInterval(pollOS, 5000);
