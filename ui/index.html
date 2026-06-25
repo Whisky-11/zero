@@ -100,7 +100,9 @@
   .node-box.zero  { stroke: var(--accent); stroke-width: 1.8; }
   .node-box.bus   { stroke: var(--fg-dim); stroke-dasharray: 5 4; }
   .node-label { fill: var(--fg); font-size: 15px; letter-spacing: 0.02em; }
-  .edge-label { fill: var(--fg-dim); font-size: 11px; letter-spacing: 0.02em; }
+  /* halo so labels stay legible over dashed edges / overlaps */
+  .edge-label { fill: var(--fg-dim); font-size: 11px; letter-spacing: 0.02em;
+    paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
   #conn-legend { position: absolute; bottom: 20px; left: 28px; font-size: 9px; letter-spacing: 0.2em; color: var(--fg-dim); text-transform: uppercase; }
   #conn-legend span { color: var(--fg); }
 
@@ -206,7 +208,7 @@
 
     <!-- CONNECTIONS -->
     <div id="view-conn" class="view">
-      <svg id="conn-svg" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+      <svg id="conn-svg" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
       <div id="conn-legend">ONE NERVOUS SYSTEM — <span id="conn-os">OS —</span> · <span id="conn-vault">VAULT —</span> · STATE BUS = <span>~/.whisky-os-state</span></div>
     </div>
 
@@ -303,20 +305,18 @@ async function buildConnections() {
   if (!connBuilt) {
     let g; try { g = await (await fetch('/api/connections')).json(); } catch { return; }
     const NS = 'http://www.w3.org/2000/svg';
-    const SX = 10, SY = 6.4;  // map node x/y (0-100) into the 1000x640 viewBox
+    const SX = 10, SY = 6.7;  // map node x/y (0-100) into the 1000x700 viewBox
     const pos = Object.fromEntries(g.nodes.map(n => [n.id, { ...n, x: n.x*SX, y: n.y*SY }]));
-    // edges first
-    g.edges.forEach(([a,b,lbl]) => {
+    // 1) edge lines (bottom layer)
+    g.edges.forEach(([a,b]) => {
       const A = pos[a], B = pos[b]; if (!A||!B) return;
       for (const cls of ['edge','edge-flow']) {
         const line = document.createElementNS(NS,'line');
         line.setAttribute('x1',A.x); line.setAttribute('y1',A.y); line.setAttribute('x2',B.x); line.setAttribute('y2',B.y);
         line.setAttribute('class',cls); if (cls==='edge-flow') line.dataset.flow='1'; svg.appendChild(line);
       }
-      if (lbl) { const t = document.createElementNS(NS,'text');
-        t.setAttribute('x',(A.x+B.x)/2); t.setAttribute('y',(A.y+B.y)/2 - 6); t.setAttribute('class','edge-label'); t.setAttribute('text-anchor','middle'); t.textContent = lbl; svg.appendChild(t); }
     });
-    // nodes (drawn over edges)
+    // 2) node boxes + labels (over lines)
     g.nodes.forEach(n => {
       const P = pos[n.id], w = n.label.length*8 + 28, h = 34;
       const rect = document.createElementNS(NS,'rect');
@@ -324,6 +324,18 @@ async function buildConnections() {
       rect.setAttribute('rx', 5); rect.setAttribute('class', 'node-box ' + n.group); rect.id = 'cn-' + n.id; svg.appendChild(rect);
       const t = document.createElementNS(NS,'text');
       t.setAttribute('x', P.x); t.setAttribute('y', P.y + 5); t.setAttribute('class','node-label'); t.setAttribute('text-anchor','middle'); t.textContent = n.label; svg.appendChild(t);
+    });
+    // 3) edge labels LAST, with a halo — so node boxes / dashes never hide them.
+    //    nudge each label perpendicular to its edge so it sits beside the line, not on it.
+    g.edges.forEach(([a,b,lbl]) => {
+      if (!lbl) return;
+      const A = pos[a], B = pos[b]; if (!A||!B) return;
+      const mx = (A.x+B.x)/2, my = (A.y+B.y)/2;
+      const dx = B.x-A.x, dy = B.y-A.y, len = Math.hypot(dx,dy) || 1;
+      const off = 14;  // perpendicular offset off the line
+      const t = document.createElementNS(NS,'text');
+      t.setAttribute('x', mx + (-dy/len)*off); t.setAttribute('y', my + (dx/len)*off + 4);
+      t.setAttribute('class','edge-label'); t.setAttribute('text-anchor','middle'); t.textContent = lbl; svg.appendChild(t);
     });
     connBuilt = true;
     // animate flow dashes

@@ -104,7 +104,6 @@ CONNECTIONS = {
         ["foundation", "bus", "emit_event / emit_inbox"],
         ["dream", "foundation", "scans → findings"],
         ["dash", "bus", "renders"],
-        ["zero", "dash", "HUD polls :7717"],
         ["memory", "recall", "graphify"],
         ["foundation", "memory", "encoded detectors ← lessons"],
     ],
