@@ -25,6 +25,12 @@ class Orchestrator:
         self.brain = Brain(self.cfg, self.store,
                            confirm_aloud=self._confirm_aloud,
                            on_text=lambda t: self.voice.speak(t))
+        # Barge-in: a SECOND wake detector that runs while Zero is thinking/speaking,
+        # so saying "zero" mid-reply cuts it off and re-arms listening.
+        self.barge = WakeListener(self.cfg.wake.model, self.cfg.wake.threshold)
+        self._interrupt = threading.Event()
+        self._barge_stop = threading.Event()
+        self._barge_thread = None
 
     def _state(self, status, activity=""):
         self.hud.push_state({"status": status, "activity": activity})
@@ -58,6 +64,37 @@ class Orchestrator:
                         return ""
         return ""
 
+    def _start_barge_monitor(self) -> None:
+        """Watch the mic for the wake word while Zero is busy (thinking/speaking).
+        On a hit: cut playback, interrupt the brain so ask() returns, flag it.
+        Sole mic consumer during this window (the run loop / _listen_once are not
+        reading), so no frames are stolen."""
+        self._interrupt.clear()
+        self._barge_stop.clear()
+        self.barge.reset()
+        fb = FrameBuffer(1280)
+
+        def _monitor():
+            for chunk in self.mic.frames():
+                if self._barge_stop.is_set():
+                    return
+                for frame in fb.push(chunk):
+                    if self.barge.feed(frame):
+                        self._interrupt.set()
+                        self.voice.stop()       # cut speech immediately
+                        self.brain.interrupt()  # end generation so ask() unblocks
+                        return
+
+        self._barge_thread = threading.Thread(target=_monitor, daemon=True)
+        self._barge_thread.start()
+
+    def _stop_barge_monitor(self) -> None:
+        self._barge_stop.set()
+        t = self._barge_thread
+        if t is not None:
+            t.join(timeout=1.5)
+            self._barge_thread = None
+
     def run(self) -> None:
         self.mic.start(); self._state("idle")
         for chunk in self.mic.frames():
@@ -76,11 +113,24 @@ class Orchestrator:
                 break
             self.store.log_turn("user", text)
             self._state("thinking", text)
+            self._start_barge_monitor()     # listen for "zero" during thinking + speaking
             try:
                 reply = self.brain.ask(text)
             except Exception:
-                self.voice.speak("Apologies, Ahmad, I hit an error."); break
-            self.store.log_turn("assistant", reply)
+                self._stop_barge_monitor()
+                if not self._interrupt.is_set():
+                    self.voice.speak("Apologies, Ahmad, I hit an error.")
+                    break
+                reply = ""
+            else:
+                self._stop_barge_monitor()
+            if self._interrupt.is_set():
+                # Ahmad said "zero" mid-reply → drop the rest, re-arm and listen now.
+                self.voice.stop()
+                self._state("listening")
+                follow = False              # fresh window, as if just woken
+                continue
+            self.store.log_turn("assistant", reply or "")
             follow = True
         self.mic.flush()            # drop audio captured during the turn
         self._state("idle")

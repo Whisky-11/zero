@@ -17,10 +17,15 @@ voice = "bm_george"
 speed = 1.0
 
 [brain]
-# Sonnet for snappy voice latency. For max speed use "claude-haiku-4-5-20251001";
-# for max smarts (slower) "claude-opus-4-8".
+# Sonnet is the daily driver (snappy voice latency). Zero escalates a single turn
+# to Opus when the request needs deeper reasoning (matched by escalate_on below or
+# an explicit "use opus"); everything else stays on Sonnet. Model is switched per
+# turn on the one warm client via the SDK's set_model — no extra latency.
 model = "claude-sonnet-4-6"
+opus_model = "claude-opus-4-8"
 trivial_model = "claude-haiku-4-5-20251001"
+# substrings (case-insensitive) in your spoken request that route THIS turn to Opus
+escalate_on = ["use opus", "think hard", "think harder", "deeply", "carefully", "thoroughly", "step by step", "architect", "design the", "debug", "analyze", "review the", "plan the", "figure out why", "complicated", "complex"]
 user_name = "Ahmad"
 
 [hud]

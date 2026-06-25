@@ -46,5 +46,23 @@ def play(audio_f32: np.ndarray, samplerate: int = 24000, block: bool = True) -> 
         sd.wait()
 
 
+def play_interruptible(audio_f32: np.ndarray, samplerate: int, stop_event) -> bool:
+    """Play audio but abort early if stop_event is set (barge-in).
+
+    Polls the event over the clip's known duration instead of a single blocking
+    wait, so a wake-word mid-speech can cut playback. Returns True if it played
+    to completion, False if it was interrupted.
+    """
+    import time
+    sd.play(audio_f32, samplerate=samplerate)
+    end = time.monotonic() + len(audio_f32) / float(samplerate) + 0.05
+    while time.monotonic() < end:
+        if stop_event.is_set():
+            sd.stop()
+            return False
+        time.sleep(0.02)
+    return True
+
+
 def stop_playback() -> None:
     sd.stop()

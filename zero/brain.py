@@ -49,12 +49,32 @@ class Brain:
     async def _ensure(self):
         if not self._open:
             await self._client.__aenter__(); self._open = True
+            self._active_model = self._cfg.brain.model
+
+    def _pick_model(self, prompt: str) -> str:
+        """Sonnet is the daily driver; escalate THIS turn to Opus only when the
+        request needs deeper reasoning (matched by config escalate_on)."""
+        p = prompt.lower()
+        triggers = getattr(self._cfg.brain, "escalate_on", []) or []
+        if any(t in p for t in triggers):
+            return self._cfg.brain.opus_model
+        return self._cfg.brain.model
 
     async def _ask(self, prompt: str) -> str:
-        """Coroutine that runs on self._loop — ensure client, query, collect text."""
+        """Coroutine that runs on self._loop — ensure client, route model, query, collect text."""
         await self._ensure()
-        await self._client.query(prompt)
+        # route this turn: switch the warm client's model only when it changes
+        want = self._pick_model(prompt)
+        if want != getattr(self, "_active_model", None):
+            try:
+                res = self._client.set_model(want)
+                if hasattr(res, "__await__"):
+                    await res
+                self._active_model = want
+            except Exception:
+                pass  # fall back to whatever model the client already has
         full = []
+        await self._client.query(prompt)
         async for message in self._client.receive_response():
             if isinstance(message, AssistantMessage):
                 for block in message.content:
@@ -68,6 +88,13 @@ class Brain:
         """Synchronous public API — schedules _ask on the dedicated loop and waits."""
         fut = asyncio.run_coroutine_threadsafe(self._ask(prompt), self._loop)
         return fut.result()
+
+    def interrupt(self) -> None:
+        """Abort the in-flight turn (barge-in) — ends receive_response so ask() returns."""
+        try:
+            asyncio.run_coroutine_threadsafe(self._client.interrupt(), self._loop)
+        except Exception:
+            pass
 
     async def _aclose(self):
         if self._open:
