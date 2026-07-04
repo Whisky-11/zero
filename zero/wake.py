@@ -31,6 +31,11 @@ class WakeListener:
             return True
         return False
 
+    def reset(self) -> None:
+        """Clear the rolling buffer (e.g. before a fresh barge-in watch so audio
+        from the previous phase can't carry a stale detection)."""
+        self._model.reset()
+
 
 class FrameBuffer:
     """Accumulate small chunks into fixed-size frames."""

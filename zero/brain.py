@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, threading, os
+import asyncio, threading, os, re
 from pathlib import Path
 from claude_agent_sdk import (ClaudeSDKClient, ClaudeAgentOptions,
                               AssistantMessage, TextBlock, HookMatcher)
@@ -49,12 +49,38 @@ class Brain:
     async def _ensure(self):
         if not self._open:
             await self._client.__aenter__(); self._open = True
+            self._active_model = self._cfg.brain.model
+
+    def _pick_model(self, prompt: str) -> str:
+        """Three tiers, cheapest that fits: Opus when the request needs depth
+        (escalate_on), Haiku for ultra-short chit-chat/acks (trivial_on or
+        <= trivial_max_words), else Sonnet (the daily driver)."""
+        b = self._cfg.brain
+        p = prompt.lower()
+        if any(t in p for t in (getattr(b, "escalate_on", []) or [])):
+            return b.opus_model
+        pn = re.sub(r"[^\w\s]", "", p).strip()           # drop punctuation
+        trivial = getattr(b, "trivial_on", []) or []
+        maxw = getattr(b, "trivial_max_words", 2)
+        if pn and (pn in trivial or (len(pn.split()) <= maxw)):
+            return getattr(b, "trivial_model", b.model)
+        return b.model
 
     async def _ask(self, prompt: str) -> str:
-        """Coroutine that runs on self._loop — ensure client, query, collect text."""
+        """Coroutine that runs on self._loop — ensure client, route model, query, collect text."""
         await self._ensure()
-        await self._client.query(prompt)
+        # route this turn: switch the warm client's model only when it changes
+        want = self._pick_model(prompt)
+        if want != getattr(self, "_active_model", None):
+            try:
+                res = self._client.set_model(want)
+                if hasattr(res, "__await__"):
+                    await res
+                self._active_model = want
+            except Exception:
+                pass  # fall back to whatever model the client already has
         full = []
+        await self._client.query(prompt)
         async for message in self._client.receive_response():
             if isinstance(message, AssistantMessage):
                 for block in message.content:
@@ -68,6 +94,13 @@ class Brain:
         """Synchronous public API — schedules _ask on the dedicated loop and waits."""
         fut = asyncio.run_coroutine_threadsafe(self._ask(prompt), self._loop)
         return fut.result()
+
+    def interrupt(self) -> None:
+        """Abort the in-flight turn (barge-in) — ends receive_response so ask() returns."""
+        try:
+            asyncio.run_coroutine_threadsafe(self._client.interrupt(), self._loop)
+        except Exception:
+            pass
 
     async def _aclose(self):
         if self._open:

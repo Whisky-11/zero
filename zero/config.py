@@ -1,6 +1,6 @@
 from __future__ import annotations
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 if sys.version_info >= (3, 11):
@@ -16,7 +16,12 @@ class SttCfg:   model: str; device: str; compute_type: str; min_silence_ms: int
 @dataclass
 class VoiceCfg: lang_code: str; voice: str; speed: float
 @dataclass
-class BrainCfg: model: str; trivial_model: str; user_name: str
+class BrainCfg:
+    model: str; trivial_model: str; user_name: str
+    opus_model: str = "claude-opus-4-8"
+    escalate_on: list[str] = field(default_factory=list)
+    trivial_on: list[str] = field(default_factory=list)
+    trivial_max_words: int = 2
 @dataclass
 class HudCfg:   ws_port: int; http_port: int
 @dataclass
