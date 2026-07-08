@@ -3,6 +3,8 @@ data/
 logs/
 *.db
 *.sqlite
+zero.run.*.log
+zero.manual.*.log
 
 # Python
 __pycache__/
