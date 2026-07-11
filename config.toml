@@ -10,6 +10,11 @@ model = "base"            # tiny|base|small|medium|large-v3 (base ~2x faster tha
 device = "auto"           # auto = CUDA if available (Windows/NVIDIA) else CPU (Mac)
 compute_type = "float16"
 min_silence_ms = 400      # silence after you stop talking before it cuts off (lower = snappier)
+# Hallucination gate: drop Whisper segments that are probably noise, not speech
+# (Whisper invents phrases from ambient audio/music and Zero was acting on them).
+# Raise no_speech_max / lower logprob_min if real speech gets dropped.
+no_speech_max = 0.6       # discard segments with no_speech_prob above this
+logprob_min = -1.0        # discard segments with avg_logprob below this
 
 [voice]
 lang_code = "b"           # British English

@@ -12,7 +12,13 @@ else:
 @dataclass
 class WakeCfg:  model: str; threshold: float
 @dataclass
-class SttCfg:   model: str; device: str; compute_type: str; min_silence_ms: int
+class SttCfg:
+    model: str; device: str; compute_type: str; min_silence_ms: int
+    # Hallucination gate (2026-07-11): Whisper invents text from ambient noise /
+    # music, which the follow-up loop then treats as a command. Discard segments
+    # whose no_speech_prob is above / avg_logprob below these bounds.
+    no_speech_max: float = 0.6
+    logprob_min: float = -1.0
 @dataclass
 class VoiceCfg: lang_code: str; voice: str; speed: float
 @dataclass

@@ -33,7 +33,8 @@ class Recorder:
 
 
 class Transcriber:
-    def __init__(self, model: str, device: str, compute_type: str) -> None:
+    def __init__(self, model: str, device: str, compute_type: str,
+                 no_speech_max: float = 0.6, logprob_min: float = -1.0) -> None:
         if device == "auto":
             try:
                 import torch
@@ -43,8 +44,17 @@ class Transcriber:
             device = "cuda" if cuda else "cpu"
             compute_type = "float16" if cuda else "int8"
         self._model = WhisperModel(model, device=device, compute_type=compute_type)
+        self._no_speech_max = no_speech_max
+        self._logprob_min = logprob_min
 
     def transcribe(self, audio_f32: np.ndarray) -> str:
         segments, _ = self._model.transcribe(
             audio_f32, language="en", beam_size=5, condition_on_previous_text=False)
-        return " ".join(s.text.strip() for s in segments).strip()
+        # Hallucination gate: Whisper confidently invents phrases from noise/music
+        # ("I don't know if I can get a taste of this" over ambient audio). A real
+        # utterance has low no_speech_prob and a sane avg_logprob; drop the rest so
+        # noise never reaches the brain as a command.
+        kept = [s for s in segments
+                if s.no_speech_prob <= self._no_speech_max
+                and s.avg_logprob >= self._logprob_min]
+        return " ".join(s.text.strip() for s in kept).strip()

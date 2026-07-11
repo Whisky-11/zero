@@ -18,7 +18,8 @@ class Orchestrator:
         self.wake = WakeListener(self.cfg.wake.model, self.cfg.wake.threshold)
         self.fb = FrameBuffer(1280)
         self.rec = Recorder(self.cfg.stt.min_silence_ms)
-        self.stt = Transcriber(self.cfg.stt.model, self.cfg.stt.device, self.cfg.stt.compute_type)
+        self.stt = Transcriber(self.cfg.stt.model, self.cfg.stt.device, self.cfg.stt.compute_type,
+                               self.cfg.stt.no_speech_max, self.cfg.stt.logprob_min)
         self.voice = Voice(self.cfg.voice.lang_code, self.cfg.voice.voice, self.cfg.voice.speed)
         self.store = Store()
         self._answer_q: queue.Queue[str] = queue.Queue()
@@ -110,6 +111,14 @@ class Orchestrator:
             self._state("listening")
             text = self._listen_once(self._IDLE_FOLLOWUP if follow else self._IDLE_FIRST)
             if not text:
+                break
+            # Hard exit phrases close the conversation window immediately — no brain
+            # call, no reply, back to wake-listening. Added 2026-07-11 after Zero kept
+            # interfering while Ahmad thought aloud ("stop... don't interfere me again").
+            low = text.lower()
+            if any(p in low for p in ("stop", "go to sleep", "that's all",
+                                      "don't interfere", "do not interfere", "leave me")):
+                self.store.log_turn("user", text)
                 break
             self.store.log_turn("user", text)
             self._state("thinking", text)
