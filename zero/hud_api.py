@@ -16,9 +16,22 @@ import urllib.parse
 from http.server import SimpleHTTPRequestHandler
 
 HOME = os.path.expanduser("~")
+
+
+def _first_dir(*cands):
+    """First candidate root that exists (cross-machine); fall back to cands[0]."""
+    return next((p for p in cands if os.path.isdir(p)), cands[0])
+
+
+# Roots differ per machine (Mac vs this Windows box); probe both so the HUD's
+# VAULT view finds the notes wherever the clone runs. Windows first, then macOS.
 ROOTS = {
-    "memory": os.path.join(HOME, ".claude/projects/-Users-ahmadsharaf/memory"),
-    "vault":  os.path.join(HOME, "Desktop/projects/calude code meomry/wiki"),
+    "memory": _first_dir(
+        os.path.join(HOME, ".claude/projects/C--Users-moze1/memory"),       # Windows
+        os.path.join(HOME, ".claude/projects/-Users-ahmadsharaf/memory")),  # macOS
+    "vault":  _first_dir(
+        os.path.join(HOME, "projects/claude-memory-vault/wiki"),            # Windows
+        os.path.join(HOME, "Desktop/projects/calude code meomry/wiki")),    # macOS
 }
 UI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
 
