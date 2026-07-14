@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Start Zero (voice companion) if not already running. Idempotent.
 set -uo pipefail
-DIR="$HOME/Desktop/projects/zero"; cd "$DIR" || exit 1
+DIR="$(cd "$(dirname "$0")" && pwd)"; cd "$DIR" || exit 1
 PY="$DIR/.venv/bin/python"; [ -x "$PY" ] || PY=$(command -v python3)
 # already up? (HUD http port 9911)
 /usr/bin/curl -s -o /dev/null -m 2 http://localhost:9911/ 2>/dev/null && { echo "zero already running"; exit 0; }
