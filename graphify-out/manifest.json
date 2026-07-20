@@ -1,0 +1,154 @@
+{
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/install.ps1": {
+    "mtime": 1782118398.1989446,
+    "hash": "eb9861928841382193557411bb8d2310"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/serve-hud.py": {
+    "mtime": 1783133226.7911327,
+    "hash": "828b3f88d684eb038a79e92ddb987cbf"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_voice.py": {
+    "mtime": 1782118398.2004337,
+    "hash": "21a5d3e661cca2a95ba4554f0e1bcdf3"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_os_bridge.py": {
+    "mtime": 1783133226.7912395,
+    "hash": "b691b7ce23f30239c87444be2b74c671"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_audio.py": {
+    "mtime": 1782118398.1995647,
+    "hash": "09e04bc4062c511e3e9852019cccfdb9"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_voice_smoke.py": {
+    "mtime": 1782118398.2005107,
+    "hash": "ad58091dffac9c2b1ee4843b2a518202"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_profile.py": {
+    "mtime": 1782118398.2001798,
+    "hash": "70a982685eea486b7c377555984c661f"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_gate.py": {
+    "mtime": 1782118398.199932,
+    "hash": "638479d0b1ca4a7e244b0a827e4e7951"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_brain_smoke.py": {
+    "mtime": 1782118398.199757,
+    "hash": "38a5bad37308a713dc21e6a87542f845"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_stt_smoke.py": {
+    "mtime": 1782118398.2003524,
+    "hash": "b6b87f6a0e1712f9f7766b429df8d8a3"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_config.py": {
+    "mtime": 1783801685.3437278,
+    "hash": "5a7280fa8801ea5c1494d8f50eaf9d82"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_stt.py": {
+    "mtime": 1782118398.2002623,
+    "hash": "d986a3c0b0a5087edbe26eb60260509f"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_memory.py": {
+    "mtime": 1782118398.2000926,
+    "hash": "68ae6f8a9410c9f06545a7c2b3d7bdde"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_brain_multiturn.py": {
+    "mtime": 1782118398.1996589,
+    "hash": "fceb3955dc33c936b2ffe566cfc13da2"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_wake.py": {
+    "mtime": 1782118398.2005997,
+    "hash": "7c844f4f0fc63a1865242f1644ae0042"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/tests/test_hud.py": {
+    "mtime": 1782118398.2000093,
+    "hash": "1c7dc101be5ed988c748e8e83dfeb15e"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/config.py": {
+    "mtime": 1783801585.8384364,
+    "hash": "373776ac2438a065d6bce14b4481b7d2"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/memory.py": {
+    "mtime": 1782118398.2015586,
+    "hash": "84e636fb4aa74f5ad66f1e85a422d4c5"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/profile.py": {
+    "mtime": 1782118398.2027993,
+    "hash": "05651926b37e9a1af59f11935e2c7b07"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/__init__.py": {
+    "mtime": 1782118398.2009015,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/hud_api.py": {
+    "mtime": 1783133226.7921066,
+    "hash": "2c10397053b0773be0e25dca9e0e537c"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/voice.py": {
+    "mtime": 1783133226.792504,
+    "hash": "5140332584edb84c2bbe1b67b012b785"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/brain.py": {
+    "mtime": 1783133226.7917385,
+    "hash": "e0b0a7fee666e098a1ded382491e8dd2"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/os_bridge.py": {
+    "mtime": 1783133226.7923877,
+    "hash": "7f92b121441f8a1c162b9d7cf0b26168"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/orchestrator.py": {
+    "mtime": 1783801623.6328456,
+    "hash": "1acffec51f8e6fc122fdc1875c4a36f7"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/gate.py": {
+    "mtime": 1782118398.2013667,
+    "hash": "84f2985194d0b3e6293562d409874eb5"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/hud.py": {
+    "mtime": 1783133226.7919934,
+    "hash": "9f1331a1666c7dcc67c13ce12a9a4962"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/audio.py": {
+    "mtime": 1783133226.7915812,
+    "hash": "3c9ebf33dd600cc8374f133c8dd59a1b"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/wake.py": {
+    "mtime": 1783133226.7926295,
+    "hash": "9c8d162922e4543eed02d09c107c7371"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/__main__.py": {
+    "mtime": 1782118398.2010167,
+    "hash": "62992e914b6a971c1a2bbe39e04d8bcf"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/zero/stt.py": {
+    "mtime": 1783801597.9190974,
+    "hash": "ddc6abc9930c21672afad09f4037e930"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/requirements.txt": {
+    "mtime": 1782118398.1994104,
+    "hash": "ae4be7daa8e95b17fa78f9d3b47263a5"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/README.md": {
+    "mtime": 1782118398.1977475,
+    "hash": "afdbd13bdfd5db61675c1d552f749114"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/handoff.md": {
+    "mtime": 1784049469.7865198,
+    "hash": "068d5c930458d944dbd3e3ea9c36b85f"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/ui/index.html": {
+    "mtime": 1784046664.4981456,
+    "hash": "0958a5c9dd37884e783049916d26e797"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/docs/superpowers/plans/2026-06-03-zero-mvp-voice-slice.md": {
+    "mtime": 1782118398.1983862,
+    "hash": "28328d03e0bf48694f2ae8fbbf28081d"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/docs/superpowers/specs/2026-06-03-zero-voice-assistant-design.md": {
+    "mtime": 1782118398.198818,
+    "hash": "9fd2a30e777f7a9d1bc03f2abc493429"
+  },
+  "/Users/ahmadsharaf/Desktop/projects/_personal/zero/prompts/zero.md": {
+    "mtime": 1783133226.7910235,
+    "hash": "4a1b7ef840560be6ed54bde3ef809915"
+  }
+}
