@@ -1,0 +1,15 @@
+# zero — gitleaks config (fleet standard: force-ai-foundation/template/.gitleaks.toml).
+title = "zero"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented local-only throwaways + example files"
+regexes = [
+]
+paths = [
+  '''.*\.example$''',
+  '''^\.gitleaks\.toml$''',
+  '''^\.gitleaksignore$''',
+]
