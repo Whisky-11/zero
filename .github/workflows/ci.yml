@@ -1,0 +1,28 @@
+name: CI
+# Additive gate for zero (local-only Python voice daemon). The runtime deps are a
+# heavy audio/ML stack (whisper, kokoro, sentence-transformers, portaudio) that is
+# slow + fragile to install in CI and unnecessary for a syntax gate — so this runs a
+# dependency-free Python compile check + gitleaks. NO deploy step (local-only daemon).
+# Follow-up: a deps-cached job to run `pytest -m "not manual"` if desired.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  syntax:
+    name: Python syntax check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile all modules (no deps)
+        run: python -m compileall -q zero tests
