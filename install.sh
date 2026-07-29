@@ -27,12 +27,19 @@ cat > "$PLIST" <<PLIST_EOF
     <key>Label</key>
     <string>com.ahmad.zero</string>
 
+    <!-- Foreground wrapper: execs `python -m zero` so launchd supervises the real
+         process and restarts only on actual death (KeepAlive + ThrottleInterval).
+         A fast-exit supervisor (run.sh) double-starts during the ~40s model load. -->
     <key>ProgramArguments</key>
     <array>
-        <string>${PYTHON}</string>
-        <string>-m</string>
-        <string>zero</string>
+        <string>/bin/bash</string>
+        <string>${DIR}/run-fg.sh</string>
     </array>
+
+    <!-- Reap the whole process tree on restart so whisper multiprocessing children
+         don't orphan + hold the HUD port (root cause of Errno 48 on restart). -->
+    <key>AbandonProcessGroup</key>
+    <false/>
 
     <key>WorkingDirectory</key>
     <string>${DIR}</string>
@@ -42,6 +49,10 @@ cat > "$PLIST" <<PLIST_EOF
 
     <key>RunAtLoad</key>
     <true/>
+
+    <!-- Guard against a tight crash-loop (e.g. whisper exit 143): wait 30s between restarts. -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
 
     <key>StandardOutPath</key>
     <string>${OUT_LOG}</string>
