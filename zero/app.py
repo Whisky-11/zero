@@ -18,7 +18,7 @@ import threading
 import traceback
 import webbrowser
 
-from zero import mac
+from zero import mac, permissions
 from zero.config import load_config
 
 ICONS = {"starting": "…", "idle": "◯", "listening": "◉", "thinking": "◌",
@@ -108,10 +108,21 @@ class ZeroApp:
         self.item_stop = rumps.MenuItem("Stop speaking", callback=self.stop)
         self.item_hud = rumps.MenuItem("Open HUD", callback=self.open_hud)
         self.item_login = rumps.MenuItem("Open at login", callback=self.toggle_login)
+        # Permissions submenu: ✓/✗ per privacy permission; click to request + open Settings
+        self.item_perms = rumps.MenuItem("Permissions")
+        self.perm_items = {}
+        for name, (why, _) in permissions.PERMISSIONS.items():
+            it = rumps.MenuItem(name, callback=self.fix_permission)
+            self.perm_items[name] = it
+            self.item_perms.add(it)
+        self.item_perms.add(None)
+        self.item_perms.add(rumps.MenuItem("Open Privacy & Security…",
+                                           callback=lambda _: permissions.request("Automation")))
+        self._perm_tick = 0
         self.app = rumps.App("Zero", title=ICONS["starting"], quit_button=None)
         self.app.menu = [self.item_status, None, self.item_talk, self.item_type,
                          self.item_mute, self.item_stop, None, self.item_hud,
-                         self.item_login, None,
+                         self.item_perms, self.item_login, None,
                          rumps.MenuItem("Quit Zero", callback=self.quit)]
         self.item_login.state = _login_item(None)
         if not _app_bundle():
@@ -140,10 +151,35 @@ class ZeroApp:
         except ValueError as e:
             print(f"[app] hotkey disabled: {e}")
         self.timer.start()
+        st = self.refresh_permissions()
+        if permissions.missing(st):
+            self.rumps.notification("Zero", "Permissions needed", permissions.summary(st))
         self.app.run()
 
     # ── UI refresh (main thread) ──
+    def refresh_permissions(self) -> dict:
+        st = permissions.status()
+        marks = {permissions.GRANTED: "✓", permissions.MISSING: "✗"}
+        for name, it in self.perm_items.items():
+            why = permissions.PERMISSIONS[name][0]
+            title = f"{marks.get(st[name], '·')} {name} — {why}"
+            if it.title != title:
+                it.title = title
+        n = len(permissions.missing(st))
+        want = f"Permissions ({n} needed)" if n else "Permissions"
+        if self.item_perms.title != want:
+            self.item_perms.title = want
+        return st
+
+    def fix_permission(self, sender) -> None:
+        name = next((n for n, it in self.perm_items.items() if it is sender), None)
+        if name:
+            permissions.request(name)
+
     def refresh(self, _=None) -> None:
+        self._perm_tick += 1
+        if self._perm_tick % 10 == 0:          # every ~3 s: pick up grants made in Settings
+            self.refresh_permissions()
         o = self.orch
         if self.error:
             self.app.title = ICONS["error"]

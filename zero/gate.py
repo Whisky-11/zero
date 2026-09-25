@@ -89,12 +89,42 @@ def describe(tool_name: str, tool_input: dict, frontmost: str = "") -> str:
         return "run an AppleScript: " + str(t.get("script", ""))[:120]
     if tool_name == "mcp__mac__open":
         return f"open {t.get('target')}"
-    return "run: " + _text(tool_input)[:160]
+    simple = {
+        "mcp__mac__screenshot": "look at the screen",
+        "mcp__mac__frontmost_app": "check the front app",
+        "mcp__mac__list_windows": "list open windows",
+        "mcp__mac__ui_elements": f"read the controls in {t.get('app') or 'the front app'}",
+        "mcp__mac__open_app": f"open {t.get('name')}",
+        "mcp__mac__activate_app": f"switch to {t.get('name')}",
+        "mcp__mac__scroll": f"scroll {'up' if (t.get('dy') or 0) > 0 else 'down'}",
+        "mcp__mac__list_shortcuts": "list Shortcuts",
+        "mcp__mac__get_clipboard": "read the clipboard",
+        "mcp__mac__set_clipboard": "copy text to the clipboard",
+        "mcp__mac__set_volume": f"set volume to {t.get('level')}%",
+        "mcp__mac__notify": f"notify: {str(t.get('text', ''))[:80]}",
+        "mcp__memory__recall": f"recall {t.get('query')}",
+        "mcp__memory__remember": f"remember {str(t.get('fact', ''))[:80]}",
+    }
+    if tool_name in simple:
+        return simple[tool_name]
+    if tool_name == "Bash":
+        return "run: " + str(t.get("command", _text(tool_input)))[:160]
+    if tool_name in ("Write", "Edit"):
+        return f"{tool_name.lower()} {t.get('file_path', '')}"
+    return f"use {label(tool_name)}: " + _text(tool_input)[:160]
 
 
-def build_pretooluse_hook(cfg, confirm_aloud, frontmost_fn=None):
+def label(tool_name: str) -> str:
+    """'mcp__mac__click_element' -> 'click_element', 'Bash' -> 'Bash'."""
+    return tool_name.rsplit("__", 1)[-1] if tool_name.startswith("mcp__") else tool_name
+
+
+def build_pretooluse_hook(cfg, confirm_aloud, frontmost_fn=None, on_action=None):
     """confirm_aloud(question:str)->bool : speak the question, listen for yes/no.
-    frontmost_fn()->str : current frontmost app (Mac); only called for input tools."""
+    frontmost_fn()->str : current frontmost app (Mac); only called for input tools.
+    on_action(event:dict) : told every decision (audit log + HUD activity feed);
+      event = {tool, input, app, decision, outcome, summary} where outcome is
+      allowed | confirmed | declined | denied."""
     mac = getattr(cfg, "mac", None)
     sensitive = list(getattr(mac, "sensitive_apps", []) or [])
     confirm_input = bool(getattr(mac, "confirm_input", False))
@@ -114,13 +144,27 @@ def build_pretooluse_hook(cfg, confirm_aloud, frontmost_fn=None):
                             cfg.gate.confirm_patterns, cfg.gate.never_patterns,
                             frontmost=front, sensitive_apps=sensitive,
                             confirm_input=confirm_input)
+
+        def report(outcome: str) -> None:
+            if on_action is None:
+                return
+            try:
+                on_action({"tool": label(name), "input": tool_input, "app": front,
+                           "decision": decision, "outcome": outcome,
+                           "summary": describe(name, tool_input, front)})
+            except Exception:
+                pass  # reporting must never block a tool
+
         if decision == ALLOW:
+            report("allowed")
             return {}
         if decision == DENY:
+            report("denied")
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
                     "permissionDecision": "deny", "permissionDecisionReason": "Refused: catastrophic action."}}
         # CONFIRM → ask Ahmad out loud
         ok = confirm_aloud(f"This will {describe(name, tool_input, front)}. Shall I proceed, Ahmad?")
+        report("confirmed" if ok else "declined")
         if ok:
             return {}
         return {"hookSpecificOutput": {"hookEventName": "PreToolUse",

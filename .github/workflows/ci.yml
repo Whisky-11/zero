@@ -43,3 +43,4 @@ jobs:
           python -m pytest -q
           tests/test_gate.py tests/test_mac.py tests/test_hud.py tests/test_config.py
           tests/test_orchestrator_controls.py tests/test_os_bridge.py
+          tests/test_audit.py tests/test_permissions.py

@@ -145,6 +145,10 @@
   .tl b { font-size: 9px; letter-spacing: 0.3em; color: var(--fg-faint); margin-right: 8px; }
   .tl.user { color: var(--fg-dim); }
   .tl.error { color: #ff8a8a; }
+  .tl.action { font-size: 10.5px; color: var(--fg-faint); font-family: 'SF Mono', Menlo, monospace; letter-spacing: 0; }
+  .tl.action i { font-style: normal; margin-left: 8px; letter-spacing: 0.2em; }
+  .tl.action.declined i, .tl.action.denied i { color: #ff8a8a; }
+  .tl.action.confirmed i { color: var(--fg); }
   #cmd-row { display: flex; gap: 8px; align-items: center; background: var(--panel);
     border: 1px solid var(--line); border-radius: 10px; padding: 6px; backdrop-filter: blur(8px); }
   #cmd-input { flex: 1; background: none; border: none; outline: none; color: var(--fg);
@@ -352,17 +356,19 @@ function applyStatus(s) {
 }
 let ws = null;
 function send(msg) { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(msg)); return true; } return false; }
-function line(kind, text) {
+function line(kind, text, tag) {
   if (!text) return;
   const t = $('transcript'), d = document.createElement('div');
   d.className = 'tl ' + kind;
-  const b = document.createElement('b'); b.textContent = { user: 'YOU', reply: 'ZERO', error: 'ERROR' }[kind] || '';
+  const b = document.createElement('b'); b.textContent = { user: 'YOU', reply: 'ZERO', error: 'ERROR', action: '→' }[kind.split(' ')[0]] || '';
   d.append(b, document.createTextNode(text));
+  if (tag) { const i = document.createElement('i'); i.textContent = tag.toUpperCase(); d.append(i); }
   t.append(d); while (t.children.length > 30) t.firstChild.remove();
   t.scrollTop = t.scrollHeight;
 }
 function onMessage(m) {
   if (m.type === 'user' || m.type === 'reply' || m.type === 'error') return line(m.type, m.text);
+  if (m.type === 'action') return line('action ' + (m.outcome || ''), m.text, m.outcome === 'allowed' ? '' : m.outcome);
   if (m.type === 'confirm') { $('confirm-q').textContent = m.question; $('confirm').classList.add('show'); $('confirm-yes').focus(); return; }
   if (m.type === 'confirm_done') { $('confirm').classList.remove('show'); return; }
   if (typeof m.muted === 'boolean') $('btn-mute').classList.toggle('on', m.muted);

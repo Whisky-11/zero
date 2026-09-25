@@ -13,6 +13,9 @@ class WakeListener:
     """
     def __init__(self, model: str = "hey_jarvis", threshold: float = 0.5) -> None:
         self._threshold = threshold
+        if model.endswith(".onnx") and not Path(model).is_absolute() and not Path(model).exists():
+            from zero.paths import ROOT     # config paths are repo-relative, cwd may not be
+            model = str(ROOT / model)
         if model.endswith(".onnx") and not Path(model).exists():
             print(f"[zero] wake model {model} not found -> falling back to built-in 'hey_jarvis'")
             model = "hey_jarvis"

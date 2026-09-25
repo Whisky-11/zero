@@ -14,7 +14,7 @@ class SubscriptionKeyError(RuntimeError):
 
 
 class Brain:
-    def __init__(self, cfg, store, confirm_aloud, on_text=None) -> None:
+    def __init__(self, cfg, store, confirm_aloud, on_text=None, on_action=None) -> None:
         if os.environ.get("ANTHROPIC_API_KEY"):
             raise SubscriptionKeyError(
                 "ANTHROPIC_API_KEY is set — Zero would bill per token. Unset it to use the subscription.")
@@ -35,7 +35,8 @@ class Brain:
         if mac.IS_MAC and getattr(getattr(cfg, "mac", None), "enabled", True):
             mcp_servers["mac"] = mac.build_mac_mcp()
             allowed += mac.TOOL_NAMES
-        hook = build_pretooluse_hook(cfg, confirm_aloud, frontmost_fn=mac.frontmost_app)
+        hook = build_pretooluse_hook(cfg, confirm_aloud, frontmost_fn=mac.frontmost_app,
+                                    on_action=on_action)
         self._options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=cfg.brain.model,

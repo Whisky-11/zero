@@ -40,20 +40,25 @@ bash install.sh                        # optional: autostart via LaunchAgent
 
 #### Zero.app — menu bar, HUD window, Mac control (recommended on macOS)
 
-After the venv above exists:
+From a fresh clone, one command does everything — Homebrew deps, the venv, all
+models (so the first wake doesn't stall), tests, then builds and opens the app:
 
 ```bash
-xcode-select --install          # once, for clang (builds the tiny app launcher)
-pip install -r requirements.txt # pulls rumps, pywebview, pyobjc on macOS
-bash macos/install-app.sh       # builds ~/Applications/Zero.app, opens it, adds it to Login Items
+bash macos/setup.sh             # or --no-app to stop after venv + models
 ```
+
+It is safe to re-run. The pieces on their own: `python -m zero.prefetch` (download
+models), `bash macos/install-app.sh` (build ~/Applications/Zero.app, retire the old
+LaunchAgent, add to Login Items, open).
 
 Zero now lives in the **menu bar**: `…` loading → `◯` idle → `◉` listening → `◌` thinking → `◍` speaking (`⊘` = mic muted).
 The menu has **Talk** (push-to-talk, also **⌥Space** from any app), **Type to Zero…**, **Mute microphone**,
 **Stop speaking**, **Open HUD** (native window with a type box, push-to-talk, mute and on-screen confirmations),
 **Open at login** and **Quit**.
 
-Grant these to **Zero** once (prompts appear on first use; otherwise System Settings › Privacy & Security):
+Grant these to **Zero** once. The menu bar's **Permissions** item shows ✓/✗ for each (it
+updates live) and clicking one triggers the system prompt and opens the right Settings pane;
+Zero also notifies you at launch if something is missing:
 
 | Permission | Why |
 |---|---|
@@ -81,6 +86,10 @@ Messages, Terminal, password managers, System Settings…) or everywhere with `c
 AppleScript, Shortcuts, quitting apps and opening executables always confirm; shelling out to `osascript`,
 `sudo`, `killall`, `launchctl`, `defaults write`… confirms too, so the shell is no way around the gate.
 Requests typed in the HUD are confirmed in the HUD (or a native dialog when no HUD is open).
+
+**Action log**: every tool Zero tries — and whether it was allowed, confirmed, declined or
+denied — is appended to `data/audit.ndjson` (rotates at 5 MB) and shown live in the HUD
+transcript (`→ press "Send" in Mail  CONFIRMED`).
 
 **macOS notes:**
 - STT runs on **CPU** (no CUDA), so it is slower. Consider setting `[stt] model = "tiny"` or `"base"` in `config.toml` for speed.
@@ -150,11 +159,15 @@ zero/
   app.py          macOS menu-bar app + global hotkey  (python -m zero --app)
   window.py       native HUD window via pywebview     (python -m zero --window)
   paths.py        repo-relative paths (the app may start from any directory)
+  permissions.py  check/request Mic, Accessibility, Screen Recording (python -m zero.permissions)
+  audit.py        data/audit.ndjson — every tool decision
+  prefetch.py     download all models up front (python -m zero.prefetch)
   __main__.py     Entrypoint: python -m zero  (or --text / --app / --window)
 macos/
   launcher.c      Zero.app's executable: runs .venv python as a child, fixes PATH, restarts on crash
   Info.plist      bundle id com.ahmad.zero, menu-bar only, privacy prompt strings
   build-app.sh    build + sign Zero.app;  install-app.sh  install, login item, open
+  setup.sh        fresh clone → running Zero.app in one command
 ui/
   index.html      Minimal JARVIS HUD (monochrome; full WebGL is Plan 4)
 prompts/

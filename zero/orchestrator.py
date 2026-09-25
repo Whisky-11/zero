@@ -9,6 +9,7 @@ from zero.memory import Store
 from zero.brain import Brain
 from zero.hud import Hud
 from zero import mac
+from zero.audit import Audit
 
 
 class Orchestrator:
@@ -35,10 +36,12 @@ class Orchestrator:
                                self.cfg.stt.no_speech_max, self.cfg.stt.logprob_min)
         self.voice = Voice(self.cfg.voice.lang_code, self.cfg.voice.voice, self.cfg.voice.speed)
         self.store = Store()
+        self.audit = Audit()
         self._answer_q: queue.Queue[str] = queue.Queue()
         self.brain = Brain(self.cfg, self.store,
                            confirm_aloud=self._confirm_aloud,
-                           on_text=lambda t: self.voice.speak(t))
+                           on_text=lambda t: self.voice.speak(t),
+                           on_action=self._on_action)
         # Barge-in: a SECOND wake detector that runs while Zero is thinking/speaking,
         # so saying "zero" mid-reply cuts it off and re-arms listening.
         self.barge = WakeListener(self.cfg.wake.model, self.cfg.wake.threshold)
@@ -51,6 +54,12 @@ class Orchestrator:
 
     def _push(self, msg: dict) -> None:
         self.hud.push_state(msg)
+
+    def _on_action(self, event: dict) -> None:
+        """Every tool decision: append to the audit log, show it on the HUD."""
+        self.audit.record(event)
+        self._push({"type": "action", "tool": event.get("tool"), "outcome": event.get("outcome"),
+                    "text": event.get("summary", "")})
 
     # ── controls (HUD WebSocket, menu bar, global hotkey) ──────────────────
     def handle_command(self, msg: dict) -> None:
