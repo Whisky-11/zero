@@ -69,6 +69,12 @@ def _install_hotkey(combo: str, on_press) -> bool:
     return True
 
 
+def _notify(text: str) -> None:
+    """macOS notification. Not rumps.notification: that needs an Info.plist next
+    to sys.executable (the venv python has none) and raises RuntimeError."""
+    threading.Thread(target=mac.notify, args=(text, "Zero"), daemon=True).start()
+
+
 def _app_bundle() -> str:
     """Path of Zero.app (set by the launcher), or '' when run from a terminal."""
     return os.environ.get("ZERO_APP_PATH", "")
@@ -153,7 +159,7 @@ class ZeroApp:
         self.timer.start()
         st = self.refresh_permissions()
         if permissions.missing(st):
-            self.rumps.notification("Zero", "Permissions needed", permissions.summary(st))
+            _notify(permissions.summary(st))
         self.app.run()
 
     # ── UI refresh (main thread) ──
@@ -201,7 +207,7 @@ class ZeroApp:
     # ── actions ──
     def _ready(self) -> bool:
         if self.orch is None or self.orch.brain is None:
-            self.rumps.notification("Zero", "", "Still loading — give me a moment.")
+            _notify("Still loading — give me a moment.")
             return False
         return True
 
@@ -215,6 +221,11 @@ class ZeroApp:
         w = self.rumps.Window(message="What can I do, Ahmad?", title="Zero",
                               default_text="", ok="Send", cancel="Cancel",
                               dimensions=(360, 60))
+        try:  # menu-bar apps aren't frontmost; without this the box opens behind windows
+            from AppKit import NSApplication
+            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
         r = w.run()
         if r.clicked and r.text.strip():
             self.orch.submit_text(r.text)
