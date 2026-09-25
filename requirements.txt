@@ -10,3 +10,8 @@ numpy>=1.26
 sentence-transformers>=3.0
 tomli>=2.0 ; python_version < "3.11"
 pytest>=8.0
+# macOS app + Mac control (menu bar, HUD window, mouse/keyboard/screen)
+rumps>=0.4 ; sys_platform == "darwin"
+pywebview>=5.0 ; sys_platform == "darwin"
+pyobjc-framework-Quartz>=10.0 ; sys_platform == "darwin"
+pyobjc-framework-Cocoa>=10.0 ; sys_platform == "darwin"

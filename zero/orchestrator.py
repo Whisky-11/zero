@@ -8,12 +8,25 @@ from zero.voice import Voice
 from zero.memory import Store
 from zero.brain import Brain
 from zero.hud import Hud
+from zero import mac
 
 
 class Orchestrator:
     def __init__(self) -> None:
-        self.cfg = load_config("config.toml")
-        self.hud = Hud(self.cfg.hud.ws_port, self.cfg.hud.http_port); self.hud.start()
+        # control state first: the HUD starts accepting commands before the
+        # (slow) models below have loaded
+        self.status, self.activity = "starting", ""
+        self.muted = False                  # mic muted = wake word ignored (push-to-talk still works)
+        self.brain = None
+        self._turn_lock = threading.Lock()  # one turn at a time (voice or typed)
+        self._ptt = threading.Event()       # push-to-talk request from HUD / hotkey / menu
+        self._typed = False                 # current turn came from text → confirm on screen, not mic
+        self._confirm_evt = threading.Event(); self._confirm_ok = False
+        self._interrupt = threading.Event()
+        self.voice = None
+        self.cfg = load_config()
+        self.hud = Hud(self.cfg.hud.ws_port, self.cfg.hud.http_port, on_command=self.handle_command)
+        self.hud.start(); self._state("starting", "loading models")
         self.mic = Mic()
         self.wake = WakeListener(self.cfg.wake.model, self.cfg.wake.threshold)
         self.fb = FrameBuffer(1280)
@@ -29,12 +42,97 @@ class Orchestrator:
         # Barge-in: a SECOND wake detector that runs while Zero is thinking/speaking,
         # so saying "zero" mid-reply cuts it off and re-arms listening.
         self.barge = WakeListener(self.cfg.wake.model, self.cfg.wake.threshold)
-        self._interrupt = threading.Event()
         self._barge_stop = threading.Event()
         self._barge_thread = None
 
     def _state(self, status, activity=""):
-        self.hud.push_state({"status": status, "activity": activity})
+        self.status, self.activity = status, activity
+        self.hud.push_state({"status": status, "activity": activity, "muted": self.muted})
+
+    def _push(self, msg: dict) -> None:
+        self.hud.push_state(msg)
+
+    # ── controls (HUD WebSocket, menu bar, global hotkey) ──────────────────
+    def handle_command(self, msg: dict) -> None:
+        kind = msg.get("type")
+        if kind == "say":
+            self.submit_text(str(msg.get("text", "")))
+        elif kind == "ptt":
+            self.push_to_talk()
+        elif kind == "mute":
+            self.set_muted(bool(msg.get("on", not self.muted)))
+        elif kind == "stop":
+            self.stop_speaking()
+        elif kind == "confirm":
+            self._confirm_ok = bool(msg.get("ok"))
+            self._confirm_evt.set()
+
+    @property
+    def busy(self) -> bool:
+        return self._turn_lock.locked()
+
+    def push_to_talk(self) -> None:
+        """Start listening now, no wake word. While busy it acts as 'stop'."""
+        if self.busy:
+            self.stop_speaking()
+        else:
+            self._ptt.set()
+
+    def set_muted(self, on: bool) -> None:
+        self.muted = on
+        self._state(self.status, self.activity)
+
+    def stop_speaking(self) -> None:
+        self._interrupt.set()
+        if self.voice is not None:
+            self.voice.stop()
+        if self.brain is not None:
+            self.brain.interrupt()
+
+    def submit_text(self, text: str) -> None:
+        """A typed request (HUD box / menu bar). Runs as its own turn."""
+        text = text.strip()
+        if not text:
+            return
+        if self.brain is None:
+            self._push({"type": "reply", "text": "Still warming up, Ahmad. One moment."})
+            return
+        threading.Thread(target=self._typed_turn, args=(text,), daemon=True).start()
+
+    def _typed_turn(self, text: str) -> None:
+        with self._turn_lock:
+            self._typed = True
+            self._interrupt.clear()
+            try:
+                self._push({"type": "user", "text": text})
+                self.store.log_turn("user", text)
+                self._state("thinking", text)
+                try:
+                    reply = self.brain.ask(text)
+                except Exception as e:
+                    reply = ""
+                    self._push({"type": "error", "text": f"{type(e).__name__}: {e}"})
+                self.store.log_turn("assistant", reply or "")
+                self._push({"type": "reply", "text": reply})
+            finally:
+                self._typed = False
+                self._state("idle")
+
+    def _confirm_on_screen(self, question: str) -> bool:
+        """Typed turns can't use the mic (the wake loop owns it), so ask on screen:
+        the HUD if one is open, else a native dialog."""
+        if self.hud.has_clients:
+            self._confirm_ok = False; self._confirm_evt.clear()
+            self._push({"type": "confirm", "question": question})
+            got = self._confirm_evt.wait(timeout=90)
+            self._push({"type": "confirm_done"})
+            return got and self._confirm_ok
+        if mac.IS_MAC:
+            ok, out = mac.osascript(
+                f"display dialog {mac.as_quote(question)} buttons {{\"No\", \"Yes\"}} "
+                f"default button \"No\" with title \"Zero\" giving up after 90", timeout=100)
+            return ok and "button returned:Yes" in out
+        return False
 
     # ~31 frames/sec (512 samples @ 16 kHz). Idle-frame budgets:
     _IDLE_FIRST = 330      # ~10.5 s to start speaking after wake
@@ -42,6 +140,8 @@ class Orchestrator:
     _IDLE_CONFIRM = 200    # ~6.5 s to say yes/no, else treated as "no"
 
     def _confirm_aloud(self, question: str) -> bool:
+        if self._typed:
+            return self._confirm_on_screen(question)
         self._state("speaking", question); self.voice.speak(question)
         text = self._listen_once(self._IDLE_CONFIRM).lower()   # silence/timeout -> deny
         return any(w in text for w in ("yes", "do it", "proceed", "go ahead", "confirm"))
@@ -99,11 +199,21 @@ class Orchestrator:
     def run(self) -> None:
         self.mic.start(); self._state("idle")
         for chunk in self.mic.frames():
+            if self._ptt.is_set():
+                self._ptt.clear()
+                self._handle_turn()
+                continue
+            if self.muted:
+                continue
             for frame in self.fb.push(chunk):
                 if self.wake.feed(frame):
                     self._handle_turn()
 
     def _handle_turn(self) -> None:
+        with self._turn_lock:
+            self._voice_turn()
+
+    def _voice_turn(self) -> None:
         """One wake opens a conversation: keep listening for follow-ups (no wake
         word) until Ahmad goes quiet, then return to wake-listening."""
         follow = False
@@ -121,6 +231,7 @@ class Orchestrator:
                 self.store.log_turn("user", text)
                 break
             self.store.log_turn("user", text)
+            self._push({"type": "user", "text": text})
             self._state("thinking", text)
             self._start_barge_monitor()     # listen for "zero" during thinking + speaking
             try:
@@ -140,6 +251,7 @@ class Orchestrator:
                 follow = False              # fresh window, as if just woken
                 continue
             self.store.log_turn("assistant", reply or "")
+            self._push({"type": "reply", "text": reply or ""})
             follow = True
         self.mic.flush()            # drop audio captured during the turn
         self._state("idle")

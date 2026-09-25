@@ -44,6 +44,26 @@ http_port = 9911          # keeps the 911 (Porsche) reference but >1024 so macOS
 
 [gate]
 # tool_input substrings that force a spoken confirmation
-confirm_patterns = ["rm ", "del ", "rmdir", "git push", "git reset --hard", "shutdown", "Remove-Item", "format ", "DROP TABLE", "kill "]
+confirm_patterns = ["rm ", "del ", "rmdir", "git push", "git reset --hard", "shutdown", "Remove-Item", "format ", "DROP TABLE", "kill ",
+    # macOS: these drive other apps or change the system — Zero's mac tools are gated
+    # separately, so shelling out to them must not be a way around the gate
+    "osascript", "cliclick", "sudo ", "killall", "pkill", "launchctl", "defaults write", "defaults delete",
+    "diskutil", "reboot", "halt", "networksetup", "tccutil", "csrutil", "spctl", "mv ", "chmod ", "chown ", "trash "]
 # patterns Zero refuses outright, even if asked
-never_patterns = ["rm -rf /", "rm -rf /*", ":(){", "mkfs", "format c:"]
+never_patterns = ["rm -rf /", "rm -rf /*", ":(){", "mkfs", "format c:", "diskutil eraseDisk", "diskutil eraseVolume", "csrutil disable"]
+
+[mac]
+# Zero's hands + eyes on macOS (screenshot, click, type, keys, apps, AppleScript, Shortcuts).
+enabled = true
+# true = every click / keystroke needs a spoken "yes". false = only in sensitive_apps.
+# (AppleScript, Shortcuts and quitting apps always confirm; looking never does.)
+confirm_input = false
+# apps where a stray click or keystroke is costly: messages, money, the shell, settings
+sensitive_apps = ["Mail", "Messages", "WhatsApp", "Slack", "Telegram", "Discord",
+                  "Terminal", "iTerm2", "Warp", "System Settings", "System Preferences",
+                  "Keychain Access", "1Password", "1Password 7", "Bitwarden", "App Store"]
+
+[app]
+# Zero.app (menu bar). Push-to-talk from anywhere — needs Accessibility for Zero.
+hotkey = "alt+space"
+window_on_top = false

@@ -9,5 +9,7 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"; cd "$DIR" || exit 1
 unset ANTHROPIC_API_KEY
+# launchd gives a bare PATH; the claude CLI usually lives in one of these
+export PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH"
 PY="$DIR/.venv/bin/python"; [ -x "$PY" ] || PY=$(command -v python3)
 exec "$PY" -m zero

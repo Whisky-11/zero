@@ -2,6 +2,8 @@ from __future__ import annotations
 import sqlite3, time
 from pathlib import Path
 
+from zero.paths import DB
+
 
 # ---------------------------------------------------------------------------
 # Lazy-loaded embedding singleton
@@ -47,7 +49,7 @@ def _cosine(a, b) -> float:
 # ---------------------------------------------------------------------------
 
 class Store:
-    def __init__(self, path: str = "data/zero.db") -> None:
+    def __init__(self, path: str | Path = DB) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._db.executescript(

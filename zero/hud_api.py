@@ -15,6 +15,8 @@ import os
 import urllib.parse
 from http.server import SimpleHTTPRequestHandler
 
+from zero.paths import UI_DIR as _UI_DIR
+
 HOME = os.path.expanduser("~")
 
 
@@ -33,7 +35,10 @@ ROOTS = {
         os.path.join(HOME, "projects/claude-memory-vault/wiki"),            # Windows
         os.path.join(HOME, "Desktop/projects/calude code meomry/wiki")),    # macOS
 }
-UI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ui")
+UI_DIR = str(_UI_DIR)
+# three.js is served locally when vendored (offline app), else from the CDN.
+THREE_PATH = "/vendor/three.module.js"
+THREE_CDN = "https://unpkg.com/three@0.160.0/build/three.module.js"
 
 
 def _list_files():
@@ -164,6 +169,12 @@ class HudApiHandler(SimpleHTTPRequestHandler):
             return self._text(content)
         if parsed.path == "/api/connections":
             return self._json(CONNECTIONS)
+        if parsed.path == THREE_PATH and not os.path.isfile(os.path.join(UI_DIR, THREE_PATH[1:])):
+            # not vendored yet (build-app.sh fetches it) → fall back to the CDN
+            self.send_response(302)
+            self.send_header("Location", THREE_CDN)
+            self.end_headers()
+            return None
         return super().do_GET()
 
     def log_message(self, *a):  # quiet

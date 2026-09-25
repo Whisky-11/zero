@@ -1,11 +1,12 @@
 from __future__ import annotations
 import asyncio, threading, os, re
-from pathlib import Path
 from claude_agent_sdk import (ClaudeSDKClient, ClaudeAgentOptions,
                               AssistantMessage, TextBlock, HookMatcher)
 from zero.memory import build_memory_mcp
 from zero.gate import build_pretooluse_hook
 from zero.profile import build_user_profile
+from zero.paths import PROMPT
+from zero import mac
 
 
 class SubscriptionKeyError(RuntimeError):
@@ -19,21 +20,27 @@ class Brain:
                 "ANTHROPIC_API_KEY is set — Zero would bill per token. Unset it to use the subscription.")
         self._cfg = cfg
         self._on_text = on_text          # callback(sentence) for streaming TTS
-        persona = Path("prompts/zero.md").read_text(encoding="utf-8")
+        persona = PROMPT.read_text(encoding="utf-8")
         user_profile = build_user_profile()
         if user_profile:
             system_prompt = persona + "\n\n## About Ahmad (from memory)\n" + user_profile
         else:
             system_prompt = persona
-        memory_mcp = build_memory_mcp(store)
-        hook = build_pretooluse_hook(cfg, confirm_aloud)
+        mcp_servers = {"memory": build_memory_mcp(store)}
+        allowed = ["Read", "Glob", "Grep", "Bash", "Write", "Edit",
+                   "WebSearch", "WebFetch",
+                   "mcp__memory__remember", "mcp__memory__recall"]
+        # Mac hands + eyes (screen, mouse, keyboard, apps). Every call still
+        # passes through the PreToolUse gate below.
+        if mac.IS_MAC and getattr(getattr(cfg, "mac", None), "enabled", True):
+            mcp_servers["mac"] = mac.build_mac_mcp()
+            allowed += mac.TOOL_NAMES
+        hook = build_pretooluse_hook(cfg, confirm_aloud, frontmost_fn=mac.frontmost_app)
         self._options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             model=cfg.brain.model,
-            mcp_servers={"memory": memory_mcp},
-            allowed_tools=["Read", "Glob", "Grep", "Bash", "Write", "Edit",
-                           "WebSearch", "WebFetch",
-                           "mcp__memory__remember", "mcp__memory__recall"],
+            mcp_servers=mcp_servers,
+            allowed_tools=allowed,
             permission_mode="default",
             hooks={"PreToolUse": [HookMatcher(matcher="*", hooks=[hook])]},
         )

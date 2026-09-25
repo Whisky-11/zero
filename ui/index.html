@@ -136,13 +136,44 @@
   .md hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
   #vault-empty { color: var(--fg-faint); font-size: 13px; letter-spacing: 0.1em; text-align: center; margin-top: 80px; }
 
+  /* ── command bar + transcript (CORE view) ── */
+  #core-centre { padding-bottom: 150px; }
+  #cmd { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    width: min(720px, calc(100% - 48px)); z-index: 6; }
+  #transcript { max-height: 112px; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 5px; }
+  .tl { font-size: 12px; line-height: 1.5; letter-spacing: 0.02em; color: #cfcfd4; }
+  .tl b { font-size: 9px; letter-spacing: 0.3em; color: var(--fg-faint); margin-right: 8px; }
+  .tl.user { color: var(--fg-dim); }
+  .tl.error { color: #ff8a8a; }
+  #cmd-row { display: flex; gap: 8px; align-items: center; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 6px; backdrop-filter: blur(8px); }
+  #cmd-input { flex: 1; background: none; border: none; outline: none; color: var(--fg);
+    font-size: 13px; letter-spacing: 0.04em; padding: 8px 10px; font-family: inherit; }
+  #cmd-input::placeholder { color: var(--fg-faint); }
+  .cmd-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line);
+    background: none; color: var(--fg-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .cmd-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+  .cmd-btn:hover { color: var(--fg); border-color: var(--fg-faint); }
+  .cmd-btn.on { color: #000; background: var(--fg); border-color: var(--fg); }
+  .cmd-btn:disabled { opacity: .35; cursor: default; }
+  #confirm { position: absolute; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6); }
+  #confirm.show { display: flex; }
+  #confirm-box { width: min(440px, calc(100% - 48px)); background: #111113; border: 1px solid var(--fg-faint);
+    border-radius: 12px; padding: 22px; }
+  #confirm-q { font-size: 14px; line-height: 1.6; letter-spacing: 0.02em; margin: 10px 0 18px; word-break: break-word; }
+  #confirm-box .row { display: flex; gap: 10px; justify-content: flex-end; }
+  #confirm-box button { padding: 8px 18px; border-radius: 7px; border: 1px solid var(--line); background: none;
+    color: var(--fg); cursor: pointer; font-size: 11px; letter-spacing: 0.25em; }
+  #confirm-box button.yes { background: var(--fg); color: #000; border-color: var(--fg); }
+
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
 
   @media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
 </style>
-<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }</script>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.js" } }</script>
 </head>
 <body>
 <canvas id="bg-canvas"></canvas>
@@ -201,11 +232,36 @@
         <div id="state-wrap"><div id="state-label">IDLE</div><div id="state-sub">NEURAL STANDBY</div></div>
       </div>
 
+      <div id="cmd">
+        <div id="transcript" aria-live="polite"></div>
+        <form id="cmd-row" autocomplete="off">
+          <button type="button" class="cmd-btn" id="btn-ptt" title="Talk (push-to-talk)">
+            <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+          </button>
+          <input id="cmd-input" placeholder="Type to Zero…  (e.g. open Safari and find flights to Dubai)">
+          <button type="button" class="cmd-btn" id="btn-stop" title="Stop speaking">
+            <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+          </button>
+          <button type="button" class="cmd-btn" id="btn-mute" title="Mute microphone (wake word off)">
+            <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3M4 4l16 16"/></svg>
+          </button>
+        </form>
+      </div>
+
       <div class="core-rail right">
         <div><div class="instr-label">Force AI OS</div><div class="instr-value" id="ci-os">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-os-bar"></div></div></div>
         <div><div class="instr-label">Needs you</div><div class="instr-value" id="ci-inbox">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-inbox-bar"></div></div></div>
         <div><div class="instr-label">Vault</div><div class="instr-value" id="ci-vault">—</div><div class="instr-bar"><div class="instr-bar-fill" id="ci-vault-bar"></div></div></div>
         <div><div class="instr-label">Voice engine</div><div class="instr-value">KOKORO</div><div class="instr-bar"><div class="instr-bar-fill" style="width:90%"></div></div></div>
+      </div>
+    </div>
+
+    <!-- confirmation for typed requests -->
+    <div id="confirm" role="dialog" aria-modal="true">
+      <div id="confirm-box">
+        <div class="instr-label">Zero asks</div>
+        <div id="confirm-q"></div>
+        <div class="row"><button id="confirm-no">NO</button><button class="yes" id="confirm-yes">YES</button></div>
       </div>
     </div>
 
@@ -284,6 +340,7 @@ pollOS(); setInterval(pollOS, 5000);
 const STATE_META = {
   idle: ['IDLE','NEURAL STANDBY'], listening: ['LISTENING','VOICE CAPTURE'],
   thinking: ['THINKING','PROCESSING'], speaking: ['SPEAKING','OUTPUT STREAM'], connected: ['CONNECTED','LINK ESTABLISHED'],
+  starting: ['STARTING','LOADING MODELS'],
 };
 function applyStatus(s) {
   state.status = s;
@@ -293,10 +350,41 @@ function applyStatus(s) {
   $('ci-state-bar').style.width = ({idle:20,listening:90,thinking:70,speaking:80,connected:30}[s]||20) + '%';
   if (s === 'listening') { state.sessions = Math.min(999, state.sessions+1); $('ci-sess').textContent = String(state.sessions).padStart(3,'0'); $('ci-sess-bar').style.width = Math.min(100, state.sessions*2) + '%'; }
 }
+let ws = null;
+function send(msg) { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(msg)); return true; } return false; }
+function line(kind, text) {
+  if (!text) return;
+  const t = $('transcript'), d = document.createElement('div');
+  d.className = 'tl ' + kind;
+  const b = document.createElement('b'); b.textContent = { user: 'YOU', reply: 'ZERO', error: 'ERROR' }[kind] || '';
+  d.append(b, document.createTextNode(text));
+  t.append(d); while (t.children.length > 30) t.firstChild.remove();
+  t.scrollTop = t.scrollHeight;
+}
+function onMessage(m) {
+  if (m.type === 'user' || m.type === 'reply' || m.type === 'error') return line(m.type, m.text);
+  if (m.type === 'confirm') { $('confirm-q').textContent = m.question; $('confirm').classList.add('show'); $('confirm-yes').focus(); return; }
+  if (m.type === 'confirm_done') { $('confirm').classList.remove('show'); return; }
+  if (typeof m.muted === 'boolean') $('btn-mute').classList.toggle('on', m.muted);
+  if (m.status) applyStatus(m.status);
+}
+function answer(ok) { send({ type: 'confirm', ok }); $('confirm').classList.remove('show'); }
+$('confirm-yes').onclick = () => answer(true);
+$('confirm-no').onclick = () => answer(false);
+document.addEventListener('keydown', e => { if ($('confirm').classList.contains('show') && e.key === 'Escape') answer(false); });
+$('cmd-row').onsubmit = e => {
+  e.preventDefault();
+  const v = $('cmd-input').value.trim();
+  if (v && send({ type: 'say', text: v })) $('cmd-input').value = '';
+};
+$('btn-ptt').onclick = () => send({ type: 'ptt' });
+$('btn-stop').onclick = () => send({ type: 'stop' });
+$('btn-mute').onclick = () => send({ type: 'mute', on: !$('btn-mute').classList.contains('on') });
+
 function connectWS() {
-  let ws; try { ws = new WebSocket('ws://localhost:8765'); } catch { return setTimeout(connectWS, 3000); }
+  try { ws = new WebSocket('ws://localhost:8765'); } catch { return setTimeout(connectWS, 3000); }
   ws.onopen = () => { state.linked = true; $('link-dot').classList.add('live'); $('ci-link').textContent = 'LIVE'; $('ci-link-bar').style.width = '100%'; };
-  ws.onmessage = e => { try { applyStatus(JSON.parse(e.data).status || 'idle'); } catch {} };
+  ws.onmessage = e => { try { onMessage(JSON.parse(e.data)); } catch {} };
   ws.onclose = ws.onerror = () => { state.linked = false; $('link-dot').classList.remove('live'); $('ci-link').textContent = 'OFFLINE'; $('ci-link-bar').style.width = '0%'; applyStatus('idle'); setTimeout(connectWS, 3000); };
 }
 connectWS();

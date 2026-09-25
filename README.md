@@ -38,6 +38,50 @@ python -m zero                         # say "hey jarvis" (or "hey zero" if you 
 bash install.sh                        # optional: autostart via LaunchAgent
 ```
 
+#### Zero.app — menu bar, HUD window, Mac control (recommended on macOS)
+
+After the venv above exists:
+
+```bash
+xcode-select --install          # once, for clang (builds the tiny app launcher)
+pip install -r requirements.txt # pulls rumps, pywebview, pyobjc on macOS
+bash macos/install-app.sh       # builds ~/Applications/Zero.app, opens it, adds it to Login Items
+```
+
+Zero now lives in the **menu bar**: `…` loading → `◯` idle → `◉` listening → `◌` thinking → `◍` speaking (`⊘` = mic muted).
+The menu has **Talk** (push-to-talk, also **⌥Space** from any app), **Type to Zero…**, **Mute microphone**,
+**Stop speaking**, **Open HUD** (native window with a type box, push-to-talk, mute and on-screen confirmations),
+**Open at login** and **Quit**.
+
+Grant these to **Zero** once (prompts appear on first use; otherwise System Settings › Privacy & Security):
+
+| Permission | Why |
+|---|---|
+| Microphone | hearing you |
+| Accessibility | clicking, typing, key presses, reading buttons, the ⌥Space hotkey |
+| Screen Recording | screenshots (quit + reopen Zero after granting) |
+| Automation | asked per app the first time Zero scripts it (Music, Mail, Safari…) |
+
+How it works: `Zero.app` contains only a small signed native launcher (`macos/launcher.c`) that runs this
+repo's `.venv` Python as its child, so macOS attributes every permission to Zero and **code changes need no
+rebuild** — just Quit and reopen. Rebuild (`bash macos/build-app.sh ~/Applications`) only if you move the repo
+or change the launcher. Ad-hoc signing means a rebuild may re-ask for permissions; set
+`ZERO_SIGN_ID="Apple Development: …"` to sign with a real certificate and keep them. The installer retires the
+old LaunchAgent (`install.sh`) so two Zeros never fight over the mic.
+
+**What Zero can do on the Mac** (the `mac` tools, `zero/mac.py`): screenshot the screen; list windows and the
+clickable elements of the front window; press buttons by name; click / scroll / type / key combos; open,
+focus and quit apps; open URLs, files and folders; run AppleScript/JXA and Shortcuts; clipboard, volume and
+notifications. Try: *"open Safari and search flights to Dubai"*, *"play my Focus playlist in Music"*,
+*"what's on my screen?"*, *"run my Morning shortcut"*.
+
+**Safety** (`zero/gate.py`, `[mac]` + `[gate]` in `config.toml`): looking is always allowed. Clicks and
+typing are allowed in ordinary apps but need a **spoken (or on-screen) yes** in `sensitive_apps` (Mail,
+Messages, Terminal, password managers, System Settings…) or everywhere with `confirm_input = true`.
+AppleScript, Shortcuts, quitting apps and opening executables always confirm; shelling out to `osascript`,
+`sudo`, `killall`, `launchctl`, `defaults write`… confirms too, so the shell is no way around the gate.
+Requests typed in the HUD are confirmed in the HUD (or a native dialog when no HUD is open).
+
 **macOS notes:**
 - STT runs on **CPU** (no CUDA), so it is slower. Consider setting `[stt] model = "tiny"` or `"base"` in `config.toml` for speed.
 - Do **NOT** set `ANTHROPIC_API_KEY` — Zero uses the Claude Code subscription; a set key causes startup failure.
@@ -101,8 +145,16 @@ zero/
   gate.py         classify(tool, input) -> ALLOW/CONFIRM/DENY + PreToolUse hook
   brain.py        Brain — ClaudeSDKClient on subscription, persona + memory + gate
   hud.py          WebSocket server (8765) + HTTP server (911, serves ui/)
-  orchestrator.py Wake->listen->think->speak loop; confirm gate; supervises
-  __main__.py     Entrypoint: python -m zero  (or  python -m zero --text)
+  orchestrator.py Wake->listen->think->speak loop; confirm gate; push-to-talk, mute, typed turns
+  mac.py          Mac control MCP tools: screen, mouse, keyboard, apps, AppleScript, Shortcuts
+  app.py          macOS menu-bar app + global hotkey  (python -m zero --app)
+  window.py       native HUD window via pywebview     (python -m zero --window)
+  paths.py        repo-relative paths (the app may start from any directory)
+  __main__.py     Entrypoint: python -m zero  (or --text / --app / --window)
+macos/
+  launcher.c      Zero.app's executable: runs .venv python as a child, fixes PATH, restarts on crash
+  Info.plist      bundle id com.ahmad.zero, menu-bar only, privacy prompt strings
+  build-app.sh    build + sign Zero.app;  install-app.sh  install, login item, open
 ui/
   index.html      Minimal JARVIS HUD (monochrome; full WebGL is Plan 4)
 prompts/
@@ -123,7 +175,11 @@ Edit `config.toml` to tune Zero's behaviour:
 | `[stt]` | `model` | `small` | `tiny`/`base`/`small`/`medium`/`large-v3` |
 | `[brain]` | `model` | `claude-opus-4-7` | Main model for complex requests |
 | `[brain]` | `trivial_model` | `claude-3-5-haiku-20241022` | Fast model (wired in Plan 2) |
-| `[hud]` | `http_port` | `911` | The Porsche reference |
+| `[hud]` | `http_port` | `9911` | The Porsche reference (>1024 so macOS allows it) |
+| `[mac]` | `confirm_input` | `false` | `true` = every click/keystroke needs a yes |
+| `[mac]` | `sensitive_apps` | Mail, Messages, Terminal… | clicks/typing here always confirm |
+| `[app]` | `hotkey` | `alt+space` | push-to-talk from anywhere (needs Accessibility) |
+| `[app]` | `window_on_top` | `false` | keep the HUD window above others |
 
 ## ANTHROPIC_API_KEY — must be unset
 

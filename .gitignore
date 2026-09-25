@@ -24,3 +24,8 @@ config.local.toml
 # training workspace + install log (not part of the app)
 wake-training/
 install.log
+
+# vendored HUD assets (fetched by macos/build-app.sh)
+ui/vendor/
+# built app
+dist/

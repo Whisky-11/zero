@@ -26,3 +26,20 @@ jobs:
           python-version: '3.12'
       - name: Compile all modules (no deps)
         run: python -m compileall -q zero tests
+
+  unit:
+    name: Fast unit tests (no audio/ML stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install light deps
+        run: pip install pytest websockets claude-agent-sdk
+      - name: Gate, Mac tools, HUD, config, orchestrator controls
+        run: >
+          python -m pytest -q
+          tests/test_gate.py tests/test_mac.py tests/test_hud.py tests/test_config.py
+          tests/test_orchestrator_controls.py tests/test_os_bridge.py

@@ -3,6 +3,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from zero.paths import CONFIG
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -32,14 +34,27 @@ class BrainCfg:
 class HudCfg:   ws_port: int; http_port: int
 @dataclass
 class GateCfg:  confirm_patterns: list[str]; never_patterns: list[str]
+@dataclass
+class MacCfg:
+    # clicks/typing/key presses need a spoken yes in these apps (or everywhere
+    # when confirm_input is true); elsewhere Zero acts directly.
+    enabled: bool = True
+    confirm_input: bool = False
+    sensitive_apps: list[str] = field(default_factory=list)
+@dataclass
+class AppCfg:
+    hotkey: str = "alt+space"     # push-to-talk from anywhere (needs Accessibility)
+    window_on_top: bool = False   # keep the HUD window above other windows
 
 @dataclass
 class Config:
     wake: WakeCfg; stt: SttCfg; voice: VoiceCfg
     brain: BrainCfg; hud: HudCfg; gate: GateCfg
+    mac: MacCfg = field(default_factory=MacCfg)
+    app: AppCfg = field(default_factory=AppCfg)
 
 
-def load_config(path: str = "config.toml") -> Config:
+def load_config(path: str | Path = CONFIG) -> Config:
     data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     return Config(
         wake=WakeCfg(**data["wake"]),
@@ -48,4 +63,6 @@ def load_config(path: str = "config.toml") -> Config:
         brain=BrainCfg(**data["brain"]),
         hud=HudCfg(**data["hud"]),
         gate=GateCfg(**data["gate"]),
+        mac=MacCfg(**data.get("mac", {})),
+        app=AppCfg(**data.get("app", {})),
     )
