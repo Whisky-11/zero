@@ -14,10 +14,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Umbra (self-hosted, Ahmad's Mac) runs only this repo's own branches; a pull
+# request from a fork always goes to a GitHub-hosted runner.
 jobs:
   syntax:
     name: Python syntax check
-    runs-on: ubuntu-latest
+    runs-on: ${{ (vars.USE_SELF_HOSTED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON('["self-hosted","linux","wsl2"]') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
